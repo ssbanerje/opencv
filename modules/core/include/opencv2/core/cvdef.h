@@ -360,6 +360,8 @@ CV_INLINE int cvRound( double value )
         fistp t;
     }
     return t;
+#elif defined _MSC_VER && defined _M_ARM && defined HAVE_TEGRA_OPTIMIZATION
+    TEGRA_ROUND(value);
 #elif defined HAVE_LRINT || defined CV_ICC || defined __GNUC__
 #  ifdef HAVE_TEGRA_OPTIMIZATION
     TEGRA_ROUND(value);
@@ -367,8 +369,12 @@ CV_INLINE int cvRound( double value )
     return (int)lrint(value);
 #  endif
 #else
-    // while this is not IEEE754-compliant rounding, it's usually a good enough approximation
-    return (int)(value + (value >= 0 ? 0.5 : -0.5));
+    double intpart, fractpart;
+    fractpart = modf(value, &intpart);
+    if ((fabs(fractpart) != 0.5) || ((((int)intpart) % 2) != 0))
+        return (int)(value + (value >= 0 ? 0.5 : -0.5));
+    else
+        return (int)intpart;
 #endif
 }
 
@@ -437,9 +443,9 @@ CV_INLINE int cvIsInf( double value )
 #  else
 #    if defined __ATOMIC_ACQ_REL && !defined __clang__
        // version for gcc >= 4.7
-#      define CV_XADD(addr, delta) __atomic_fetch_add(addr, delta, __ATOMIC_ACQ_REL)
+#      define CV_XADD(addr, delta) (int)__atomic_fetch_add((unsigned*)(addr), (unsigned)(delta), __ATOMIC_ACQ_REL)
 #    else
-#      define CV_XADD(addr, delta) __sync_fetch_and_add(addr, delta)
+#      define CV_XADD(addr, delta) (int)__sync_fetch_and_add((unsigned*)(addr), (unsigned)(delta))
 #    endif
 #  endif
 #elif (defined WIN32 || defined _WIN32 || defined WINCE) && (!defined RC_INVOKED)

@@ -239,7 +239,7 @@ void SimpleBlobDetector::findBlobs(const cv::Mat &image, const cv::Mat &binaryIm
             if (ratio < params.minConvexity || ratio >= params.maxConvexity)
                 continue;
         }
-
+        
         center.location = Point2d(moms.m10 / moms.m00, moms.m01 / moms.m00);
 
         if (params.filterByColor)

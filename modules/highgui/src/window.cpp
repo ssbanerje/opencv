@@ -57,7 +57,7 @@ CV_IMPL void cvSetWindowProperty(const char* name, int prop_id, double prop_valu
 
         #if defined (HAVE_QT)
             cvSetModeWindow_QT(name,prop_value);
-        #elif defined WIN32 || defined _WIN32
+        #elif defined(HAVE_WIN32UI)
             cvSetModeWindow_W32(name,prop_value);
         #elif defined (HAVE_GTK)
             cvSetModeWindow_GTK(name,prop_value);
@@ -96,7 +96,7 @@ CV_IMPL double cvGetWindowProperty(const char* name, int prop_id)
 
         #if defined (HAVE_QT)
             return cvGetModeWindow_QT(name);
-        #elif defined WIN32 || defined _WIN32
+        #elif defined(HAVE_WIN32UI)
             return cvGetModeWindow_W32(name);
         #elif defined (HAVE_GTK)
             return cvGetModeWindow_GTK(name);
@@ -113,7 +113,7 @@ CV_IMPL double cvGetWindowProperty(const char* name, int prop_id)
 
         #if defined (HAVE_QT)
             return cvGetPropWindow_QT(name);
-        #elif defined WIN32 || defined _WIN32
+        #elif defined(HAVE_WIN32UI)
             return cvGetPropWindowAutoSize_W32(name);
         #elif defined (HAVE_GTK)
             return cvGetPropWindowAutoSize_GTK(name);
@@ -126,7 +126,7 @@ CV_IMPL double cvGetWindowProperty(const char* name, int prop_id)
 
         #if defined (HAVE_QT)
             return cvGetRatioWindow_QT(name);
-        #elif defined WIN32 || defined _WIN32
+        #elif defined(HAVE_WIN32UI)
             return cvGetRatioWindow_W32(name);
         #elif defined (HAVE_GTK)
             return cvGetRatioWindow_GTK(name);
@@ -139,7 +139,7 @@ CV_IMPL double cvGetWindowProperty(const char* name, int prop_id)
 
         #if defined (HAVE_QT)
             return cvGetOpenGlProp_QT(name);
-        #elif defined WIN32 || defined _WIN32
+        #elif defined(HAVE_WIN32UI)
             return cvGetOpenGlProp_W32(name);
         #elif defined (HAVE_GTK)
             return cvGetOpenGlProp_GTK(name);
@@ -342,15 +342,16 @@ CV_IMPL void cvUpdateWindow(const char*)
 
 #if defined (HAVE_QT)
 
-CvFont cv::fontQt(const String& nameFont, int pointSize, Scalar color, int weight,  int style, int /*spacing*/)
+cv::QtFont cv::fontQt(const String& nameFont, int pointSize, Scalar color, int weight,  int style, int /*spacing*/)
 {
-return cvFontQt(nameFont.c_str(), pointSize,color,weight, style);
+    CvFont f = cvFontQt(nameFont.c_str(), pointSize,color,weight, style);
+    return *(cv::QtFont*)(&f);
 }
 
-void cv::addText( const Mat& img, const String& text, Point org, CvFont font)
+void cv::addText( const Mat& img, const String& text, Point org, const QtFont& font)
 {
     CvMat _img = img;
-    cvAddText( &_img, text.c_str(), org,&font);
+    cvAddText( &_img, text.c_str(), org, (CvFont*)&font);
 }
 
 void cv::displayStatusBar(const String& name,  const String& text, int delayms)
@@ -390,13 +391,13 @@ int cv::createButton(const String& button_name, ButtonCallback on_change, void* 
 
 #else
 
-CvFont cv::fontQt(const String&, int, Scalar, int,  int, int)
+cv::QtFont cv::fontQt(const String&, int, Scalar, int,  int, int)
 {
     CV_Error(CV_StsNotImplemented, "The library is compiled without QT support");
-    return CvFont();
+    return QtFont();
 }
 
-void cv::addText( const Mat&, const String&, Point, CvFont)
+void cv::addText( const Mat&, const String&, Point, const QtFont&)
 {
     CV_Error(CV_StsNotImplemented, "The library is compiled without QT support");
 }
@@ -440,11 +441,11 @@ int cv::createButton(const String&, ButtonCallback, void*, int , bool )
 
 #endif
 
-#if   defined WIN32 || defined _WIN32         // see window_w32.cpp
+#if   defined(HAVE_WIN32UI)   // see window_w32.cpp
 #elif defined (HAVE_GTK)      // see window_gtk.cpp
-#elif defined (HAVE_COCOA)   // see window_carbon.cpp
+#elif defined (HAVE_COCOA)    // see window_carbon.cpp
 #elif defined (HAVE_CARBON)
-#elif defined (HAVE_QT) //YV see window_QT.cpp
+#elif defined (HAVE_QT)       //YV see window_QT.cpp
 
 #else
 

@@ -211,3 +211,5 @@ void WebPInitPremultiplySSE2(void) {
 #if defined(__cplusplus) || defined(c_plusplus)
 }    // extern "C"
 #endif
+
+
