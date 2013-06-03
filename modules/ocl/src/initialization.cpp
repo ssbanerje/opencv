@@ -127,6 +127,8 @@ namespace cv
             cl_platform_id oclplatform;
             std::vector<cl_device_id> devices;
             std::vector<String> devName;
+            String platName;
+            String clVersion;
 
             cl_context oclcontext;
             cl_command_queue clCmdQueue;
@@ -260,7 +262,7 @@ namespace cv
 
         int setDevMemType(DevMemRW rw_type, DevMemType mem_type)
         {
-            if( (mem_type == DEVICE_MEM_PM && 
+            if( (mem_type == DEVICE_MEM_PM &&
                  Context::getContext()->impl->unified_memory == 0) )
                 return -1;
             gDeviceMemRW = rw_type;
@@ -298,10 +300,15 @@ namespace cv
             std::vector<cl_platform_id> platforms(numPlatforms);
             openCLSafeCall(clGetPlatformIDs(numPlatforms, &platforms[0], 0));
 
-            char deviceName[256];
             int devcienums = 0;
+
+            const static int max_name_length = 256;
+            char deviceName[max_name_length];
+            char plfmName[max_name_length];
+            char clVersion[256];
             for (unsigned i = 0; i < numPlatforms; ++i)
             {
+
                 cl_uint numsdev;
                 cl_int status = clGetDeviceIDs(platforms[i], devicetype, 0, NULL, &numsdev);
                 if(status != CL_DEVICE_NOT_FOUND)
@@ -314,7 +321,12 @@ namespace cv
                     openCLSafeCall(clGetDeviceIDs(platforms[i], devicetype, numsdev, &devices[0], 0));
 
                     Info ocltmpinfo;
+                    openCLSafeCall(clGetPlatformInfo(platforms[i], CL_PLATFORM_NAME, sizeof(plfmName), plfmName, NULL));
+                    ocltmpinfo.PlatformName = String(plfmName);
+                    ocltmpinfo.impl->platName = String(plfmName);
                     ocltmpinfo.impl->oclplatform = platforms[i];
+                    openCLSafeCall(clGetPlatformInfo(platforms[i], CL_PLATFORM_VERSION, sizeof(clVersion), clVersion, NULL));
+                    ocltmpinfo.impl->clVersion = clVersion;
                     for(unsigned j = 0; j < numsdev; ++j)
                     {
                         ocltmpinfo.impl->devices.push_back(devices[j]);
@@ -355,64 +367,43 @@ namespace cv
             clFinish(Context::getContext()->impl->clCmdQueue);
         }
 
-        void queryDeviceInfo(DEVICE_INFO info_type, void* info)
+        //template specializations of queryDeviceInfo
+        template<>
+        bool queryDeviceInfo<IS_CPU_DEVICE, bool>(cl_kernel)
         {
-            static Info::Impl* impl = Context::getContext()->impl;
-            switch(info_type)
-            {
-            case WAVEFRONT_SIZE:
-                {
-                    bool is_cpu = false;
-                    queryDeviceInfo(IS_CPU_DEVICE, &is_cpu);
-                    if(is_cpu)
-                    {
-                        *(int*)info = 1;
-                        return;
-                    }
-#ifdef CL_DEVICE_WAVEFRONT_WIDTH_AMD
-                    try
-                    {
-                        openCLSafeCall(clGetDeviceInfo(Context::getContext()->impl->devices[0],
-                            CL_DEVICE_WAVEFRONT_WIDTH_AMD, sizeof(size_t), info, 0));
-                    }
-                    catch(const cv::Exception&)
-#elif defined (CL_DEVICE_WARP_SIZE_NV)
-                    const int EXT_LEN = 4096 + 1 ;
-                    char extends_set[EXT_LEN];
-                    size_t extends_size;
-                    openCLSafeCall(clGetDeviceInfo(impl->devices[impl->devnum], CL_DEVICE_EXTENSIONS, EXT_LEN, (void *)extends_set, &extends_size));
-                    extends_set[EXT_LEN - 1] = 0;
-                    if(std::string(extends_set).find("cl_nv_device_attribute_query") != std::string::npos)
-                    {
-                        openCLSafeCall(clGetDeviceInfo(Context::getContext()->impl->devices[0],
-                            CL_DEVICE_WARP_SIZE_NV, sizeof(size_t), info, 0));
-                    }
-                    else
-#endif
-                    {
-                        // if no way left for us to query the warp size, we can get it from kernel group info
-                        static const char * _kernel_string = "__kernel void test_func() {}";
-                        cl_kernel kernel;
-                        kernel = openCLGetKernelFromSource(Context::getContext(), &_kernel_string, "test_func");
-                        openCLSafeCall(clGetKernelWorkGroupInfo(kernel, impl->devices[impl->devnum],
-                            CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE, sizeof(size_t), info, NULL));
-                    }
+            Info::Impl* impl = Context::getContext()->impl;
+            cl_device_type devicetype;
+            openCLSafeCall(clGetDeviceInfo(impl->devices[impl->devnum],
+                CL_DEVICE_TYPE, sizeof(cl_device_type),
+                &devicetype, NULL));
+            return (devicetype == CVCL_DEVICE_TYPE_CPU);
+        }
 
-                }
-                break;
-            case IS_CPU_DEVICE:
-                {
-                    cl_device_type devicetype;
-                    openCLSafeCall(clGetDeviceInfo(impl->devices[impl->devnum],
-                                    CL_DEVICE_TYPE, sizeof(cl_device_type),
-                                    &devicetype, NULL));
-                    *(bool*)info = (devicetype == CVCL_DEVICE_TYPE_CPU);
-                }
-                break;
-            default:
-                CV_Error(-1, "Invalid device info type");
-                break;
+        template<typename _ty>
+        static _ty queryWavesize(cl_kernel kernel)
+        {
+            size_t info = 0;
+            Info::Impl* impl = Context::getContext()->impl;
+            bool is_cpu = queryDeviceInfo<IS_CPU_DEVICE, bool>();
+            if(is_cpu)
+            {
+                return 1;
             }
+            CV_Assert(kernel != NULL);
+            openCLSafeCall(clGetKernelWorkGroupInfo(kernel, impl->devices[impl->devnum],
+                CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE, sizeof(size_t), &info, NULL));
+            return static_cast<_ty>(info);
+        }
+
+        template<>
+        size_t queryDeviceInfo<WAVEFRONT_SIZE, size_t>(cl_kernel kernel)
+        {
+            return queryWavesize<size_t>(kernel);
+        }
+        template<>
+        int queryDeviceInfo<WAVEFRONT_SIZE, int>(cl_kernel kernel)
+        {
+            return queryWavesize<int>(kernel);
         }
 
         void openCLReadBuffer(Context *clCxt, cl_mem dst_buffer, void *host_buffer, size_t size)
@@ -438,13 +429,13 @@ namespace cv
         }
 
         void openCLMallocPitchEx(Context *clCxt, void **dev_ptr, size_t *pitch,
-                                 size_t widthInBytes, size_t height, 
+                                 size_t widthInBytes, size_t height,
                                  DevMemRW rw_type, DevMemType mem_type, void* hptr)
         {
             cl_int status;
             if(hptr && (mem_type==DEVICE_MEM_UHP || mem_type==DEVICE_MEM_CHP))
-                *dev_ptr = clCreateBuffer(clCxt->impl->oclcontext, 
-                                          gDevMemRWValueMap[rw_type]|gDevMemTypeValueMap[mem_type], 
+                *dev_ptr = clCreateBuffer(clCxt->impl->oclcontext,
+                                          gDevMemRWValueMap[rw_type]|gDevMemTypeValueMap[mem_type],
                                           widthInBytes * height, hptr, &status);
             else
                 *dev_ptr = clCreateBuffer(clCxt->impl->oclcontext, gDevMemRWValueMap[rw_type]|gDevMemTypeValueMap[mem_type],
@@ -999,6 +990,8 @@ namespace cv
                 return impl->double_support == 1;
             case CL_UNIFIED_MEM:
                 return impl->unified_memory == 1;
+            case CL_VER_1_2:
+                return impl->clVersion.find("OpenCL 1.2") != String::npos;
             default:
                 return false;
             }
@@ -1035,6 +1028,7 @@ namespace cv
             impl->release();
             impl = new Impl;
             DeviceName.clear();
+            PlatformName.clear();
         }
 
         Info::~Info()
@@ -1048,6 +1042,7 @@ namespace cv
             impl->release();
             impl = m.impl->copy();
             DeviceName = m.DeviceName;
+            PlatformName = m.PlatformName;
             return *this;
         }
 
@@ -1055,6 +1050,7 @@ namespace cv
         {
             impl = m.impl->copy();
             DeviceName = m.DeviceName;
+            PlatformName = m.PlatformName;
         }
     }//namespace ocl
 

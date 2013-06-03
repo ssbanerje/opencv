@@ -1,17 +1,16 @@
 #ifndef __OPENCV_GTESTCV_HPP__
 #define __OPENCV_GTESTCV_HPP__
 
-#ifdef HAVE_CVCONFIG_H
-#  include "cvconfig.h"
-#endif
+#include "opencv2/core/cvdef.h"
+#include <stdarg.h> // for va_list
+
+#include "cvconfig.h"
 
 #ifndef GTEST_CREATE_SHARED_LIBRARY
 #ifdef BUILD_SHARED_LIBS
 #define GTEST_LINKED_AS_SHARED_LIBRARY 1
 #endif
 #endif
-
-#include <stdarg.h> // for va_list
 
 #ifdef _MSC_VER
 #pragma warning( disable: 4127 )
@@ -540,6 +539,7 @@ namespace cvtest
 CV_EXPORTS void fillGradient(Mat& img, int delta = 5);
 CV_EXPORTS void smoothBorder(Mat& img, const Scalar& color, int delta = 3);
 
+CV_EXPORTS void printVersionInfo(bool useStdOut = true);
 } //namespace cvtest
 
 #define CV_TEST_MAIN(resourcesubdir) \
@@ -547,6 +547,7 @@ int main(int argc, char **argv) \
 { \
     cvtest::TS::ptr()->init(resourcesubdir); \
     ::testing::InitGoogleTest(&argc, argv); \
+    cvtest::printVersionInfo();\
     return RUN_ALL_TESTS(); \
 }
 
