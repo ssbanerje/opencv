@@ -1,6 +1,14 @@
 #ifndef __OPENCV_TS_PERF_HPP__
 #define __OPENCV_TS_PERF_HPP__
 
+#include "cvconfig.h"
+
+#ifndef GTEST_CREATE_SHARED_LIBRARY
+#  ifdef BUILD_SHARED_LIBS
+#    define GTEST_LINKED_AS_SHARED_LIBRARY 1
+#  endif
+#endif
+
 #include "opencv2/core.hpp"
 #include "ts_gtest.h"
 
@@ -474,6 +482,7 @@ int main(int argc, char **argv)\
     ::perf::Regression::Init(#testsuitname);\
     ::perf::TestBase::Init(argc, argv);\
     ::testing::InitGoogleTest(&argc, argv);\
+    cvtest::printVersionInfo();\
     return RUN_ALL_TESTS();\
 }
 

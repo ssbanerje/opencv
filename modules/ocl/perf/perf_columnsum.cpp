@@ -16,6 +16,7 @@
 //
 // @Authors
 //    Fangfang Bai, fangfang@multicorewareinc.com
+//    Jin Ma,       jin@multicorewareinc.com
 //
 // Redistribution and use in source and binary forms, with or without modification,
 // are permitted provided that the following conditions are met:
@@ -45,9 +46,9 @@
 #include "precomp.hpp"
 
 ///////////// columnSum////////////////////////
-TEST(columnSum)
+PERFTEST(columnSum)
 {
-    Mat src, dst;
+    Mat src, dst, ocl_dst;
     ocl::oclMat d_src, d_dst;
 
     for (int size = Min_Size; size <= Max_Size; size *= Multiple)
@@ -58,31 +59,30 @@ TEST(columnSum)
 
         CPU_ON;
         dst.create(src.size(), src.type());
+        for (int j = 0; j < src.cols; j++)
+            dst.at<float>(0, j) = src.at<float>(0, j);
 
         for (int i = 1; i < src.rows; ++i)
-        {
             for (int j = 0; j < src.cols; ++j)
-            {
-                dst.at<float>(i, j) = src.at<float>(i, j) += src.at<float>(i - 1, j);
-            }
-        }
-
+                dst.at<float>(i, j) = dst.at<float>(i - 1 , j) + src.at<float>(i , j);
         CPU_OFF;
 
         d_src.upload(src);
+
         WARMUP_ON;
         ocl::columnSum(d_src, d_dst);
         WARMUP_OFF;
 
         GPU_ON;
         ocl::columnSum(d_src, d_dst);
-         ;
         GPU_OFF;
 
         GPU_FULL_ON;
         d_src.upload(src);
         ocl::columnSum(d_src, d_dst);
-        d_dst.download(dst);
+        d_dst.download(ocl_dst);
         GPU_FULL_OFF;
+
+        TestSystem::instance().ExpectedMatNear(dst, ocl_dst, 5e-1);
     }
 }

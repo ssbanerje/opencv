@@ -270,7 +270,7 @@ namespace cv
             size_t globalThreads[3] = {glbSizeX, glbSizeY, 1};
             size_t localThreads[3] = {blkSizeX, blkSizeY, 1};
 
-
+            float borderFloat[4] = {(float)borderValue[0], (float)borderValue[1], (float)borderValue[2], (float)borderValue[3]};
             std::vector< std::pair<size_t, const void *> > args;
             if(map1.channels() == 2)
             {
@@ -292,7 +292,7 @@ namespace cv
                 args.push_back( std::make_pair(sizeof(cl_int), (void *)&cols));
                 float borderFloat[4] = {(float)borderValue[0], (float)borderValue[1], (float)borderValue[2], (float)borderValue[3]};
 
-               if(src.clCxt->supportsFeature(Context::CL_DOUBLE))
+                if(src.clCxt->supportsFeature(Context::CL_DOUBLE))
                 {
                     args.push_back( std::make_pair(sizeof(cl_double4), (void *)&borderValue));
                 }
@@ -326,7 +326,6 @@ namespace cv
                 }
                 else
                 {
-                    float borderFloat[4] = {(float)borderValue[0], (float)borderValue[1], (float)borderValue[2], (float)borderValue[3]};
                     args.push_back( std::make_pair(sizeof(cl_float4), (void *)&borderFloat));
                 }
             }
@@ -1012,10 +1011,8 @@ namespace cv
             warpPerspective_gpu(src, dst, coeffs, interpolation);
         }
 
-
         ////////////////////////////////////////////////////////////////////////
         // integral
-
         void integral(const oclMat &src, oclMat &sum, oclMat &sqsum)
         {
             CV_Assert(src.type() == CV_8UC1);
@@ -1029,13 +1026,24 @@ namespace cv
             int vcols = (pre_invalid + src.cols + vlen - 1) / vlen;
 
             oclMat t_sum , t_sqsum;
-            t_sum.create(src.cols, src.rows, CV_32SC1);
-            t_sqsum.create(src.cols, src.rows, CV_32FC1);
-
             int w = src.cols + 1, h = src.rows + 1;
-            sum.create(h, w, CV_32SC1);
+            int depth;
+            if( src.cols * src.rows <= 2901 * 2901 ) //2901 is the maximum size for int when all values are 255
+            {
+                t_sum.create(src.cols, src.rows, CV_32SC1);
+                sum.create(h, w, CV_32SC1);
+            }
+            else
+            {
+                 //Use float to prevent overflow
+                t_sum.create(src.cols, src.rows, CV_32FC1);
+                sum.create(h, w, CV_32FC1);
+            }
+            t_sqsum.create(src.cols, src.rows, CV_32FC1);
             sqsum.create(h, w, CV_32FC1);
-            int sum_offset = sum.offset / vlen, sqsum_offset = sqsum.offset / vlen;
+            depth = sum.depth();
+            int sum_offset = sum.offset / vlen;
+            int sqsum_offset = sqsum.offset / vlen;
 
             std::vector<std::pair<size_t , const void *> > args;
             args.push_back( std::make_pair( sizeof(cl_mem) , (void *)&src.data ));
@@ -1048,7 +1056,7 @@ namespace cv
             args.push_back( std::make_pair( sizeof(cl_int) , (void *)&src.step ));
             args.push_back( std::make_pair( sizeof(cl_int) , (void *)&t_sum.step));
             size_t gt[3] = {((vcols + 1) / 2) * 256, 1, 1}, lt[3] = {256, 1, 1};
-            openCLExecuteKernel(src.clCxt, &imgproc_integral, "integral_cols", gt, lt, args, -1, -1);
+            openCLExecuteKernel(src.clCxt, &imgproc_integral, "integral_cols", gt, lt, args, -1, depth);
             args.clear();
             args.push_back( std::make_pair( sizeof(cl_mem) , (void *)&t_sum.data ));
             args.push_back( std::make_pair( sizeof(cl_mem) , (void *)&t_sqsum.data ));
@@ -1062,9 +1070,9 @@ namespace cv
             args.push_back( std::make_pair( sizeof(cl_int) , (void *)&sum_offset));
             args.push_back( std::make_pair( sizeof(cl_int) , (void *)&sqsum_offset));
             size_t gt2[3] = {t_sum.cols  * 32, 1, 1}, lt2[3] = {256, 1, 1};
-            openCLExecuteKernel(src.clCxt, &imgproc_integral, "integral_rows", gt2, lt2, args, -1, -1);
-            //std::cout << "tested" << std::endl;
+            openCLExecuteKernel(src.clCxt, &imgproc_integral, "integral_rows", gt2, lt2, args, -1, depth);
         }
+
         void integral(const oclMat &src, oclMat &sum)
         {
             CV_Assert(src.type() == CV_8UC1);
@@ -1074,10 +1082,18 @@ namespace cv
             int vcols = (pre_invalid + src.cols + vlen - 1) / vlen;
 
             oclMat t_sum;
-            t_sum.create(src.cols, src.rows, CV_32SC1);
-
             int w = src.cols + 1, h = src.rows + 1;
-            sum.create(h, w, CV_32SC1);
+            int depth;
+            if(src.cols * src.rows <= 2901 * 2901)
+            {
+                t_sum.create(src.cols, src.rows, CV_32SC1);
+                sum.create(h, w, CV_32SC1);
+            }else
+            {
+                 t_sum.create(src.cols, src.rows, CV_32FC1);
+                 sum.create(h, w, CV_32FC1);
+            }
+            depth = sum.depth();
             int sum_offset = sum.offset / vlen;
 
             std::vector<std::pair<size_t , const void *> > args;
@@ -1090,7 +1106,7 @@ namespace cv
             args.push_back( std::make_pair( sizeof(cl_int) , (void *)&src.step ));
             args.push_back( std::make_pair( sizeof(cl_int) , (void *)&t_sum.step));
             size_t gt[3] = {((vcols + 1) / 2) * 256, 1, 1}, lt[3] = {256, 1, 1};
-            openCLExecuteKernel(src.clCxt, &imgproc_integral_sum, "integral_sum_cols", gt, lt, args, -1, -1);
+            openCLExecuteKernel(src.clCxt, &imgproc_integral_sum, "integral_sum_cols", gt, lt, args, -1, depth);
             args.clear();
             args.push_back( std::make_pair( sizeof(cl_mem) , (void *)&t_sum.data ));
             args.push_back( std::make_pair( sizeof(cl_mem) , (void *)&sum.data ));
@@ -1100,7 +1116,7 @@ namespace cv
             args.push_back( std::make_pair( sizeof(cl_int) , (void *)&sum.step));
             args.push_back( std::make_pair( sizeof(cl_int) , (void *)&sum_offset));
             size_t gt2[3] = {t_sum.cols  * 32, 1, 1}, lt2[3] = {256, 1, 1};
-            openCLExecuteKernel(src.clCxt, &imgproc_integral_sum, "integral_sum_rows", gt2, lt2, args, -1, -1);
+            openCLExecuteKernel(src.clCxt, &imgproc_integral_sum, "integral_sum_rows", gt2, lt2, args, -1, depth);
             //std::cout << "tested" << std::endl;
         }
 
@@ -1193,30 +1209,41 @@ namespace cv
         void cornerHarris(const oclMat &src, oclMat &dst, int blockSize, int ksize,
                           double k, int borderType)
         {
-            if(!src.clCxt->supportsFeature(Context::CL_DOUBLE) && src.depth() == CV_64F)
-            {
-                CV_Error(Error::GpuNotSupported, "select device don't support double");
-            }
-            CV_Assert(src.cols >= blockSize / 2 && src.rows >= blockSize / 2);
-            oclMat Dx, Dy;
-            CV_Assert(borderType == cv::BORDER_CONSTANT || borderType == cv::BORDER_REFLECT101 || borderType == cv::BORDER_REPLICATE || borderType == cv::BORDER_REFLECT);
-            extractCovData(src, Dx, Dy, blockSize, ksize, borderType);
-            dst.create(src.size(), CV_32F);
-            corner_ocl(imgproc_calcHarris, "calcHarris", blockSize, static_cast<float>(k), Dx, Dy, dst, borderType);
+            oclMat dx, dy;
+            cornerHarris_dxdy(src, dst, dx, dy, blockSize, ksize, k, borderType);
         }
 
-        void cornerMinEigenVal(const oclMat &src, oclMat &dst, int blockSize, int ksize, int borderType)
+        void cornerHarris_dxdy(const oclMat &src, oclMat &dst, oclMat &dx, oclMat &dy, int blockSize, int ksize,
+                          double k, int borderType)
         {
             if(!src.clCxt->supportsFeature(Context::CL_DOUBLE) && src.depth() == CV_64F)
             {
                 CV_Error(Error::GpuNotSupported, "select device don't support double");
             }
             CV_Assert(src.cols >= blockSize / 2 && src.rows >= blockSize / 2);
-            oclMat Dx, Dy;
             CV_Assert(borderType == cv::BORDER_CONSTANT || borderType == cv::BORDER_REFLECT101 || borderType == cv::BORDER_REPLICATE || borderType == cv::BORDER_REFLECT);
-            extractCovData(src, Dx, Dy, blockSize, ksize, borderType);
+            extractCovData(src, dx, dy, blockSize, ksize, borderType);
             dst.create(src.size(), CV_32F);
-            corner_ocl(imgproc_calcMinEigenVal, "calcMinEigenVal", blockSize, 0, Dx, Dy, dst, borderType);
+            corner_ocl(imgproc_calcHarris, "calcHarris", blockSize, static_cast<float>(k), dx, dy, dst, borderType);
+        }
+
+        void cornerMinEigenVal(const oclMat &src, oclMat &dst, int blockSize, int ksize, int borderType)
+        {
+            oclMat dx, dy;
+            cornerMinEigenVal_dxdy(src, dst, dx, dy, blockSize, ksize, borderType);
+        }
+
+        void cornerMinEigenVal_dxdy(const oclMat &src, oclMat &dst, oclMat &dx, oclMat &dy, int blockSize, int ksize, int borderType)
+        {
+            if(!src.clCxt->supportsFeature(Context::CL_DOUBLE) && src.depth() == CV_64F)
+            {
+                CV_Error(Error::GpuNotSupported, "select device don't support double");
+            }
+            CV_Assert(src.cols >= blockSize / 2 && src.rows >= blockSize / 2);
+            CV_Assert(borderType == cv::BORDER_CONSTANT || borderType == cv::BORDER_REFLECT101 || borderType == cv::BORDER_REPLICATE || borderType == cv::BORDER_REFLECT);
+            extractCovData(src, dx, dy, blockSize, ksize, borderType);
+            dst.create(src.size(), CV_32F);
+            corner_ocl(imgproc_calcMinEigenVal, "calcMinEigenVal", blockSize, 0, dx, dy, dst, borderType);
         }
         /////////////////////////////////// MeanShiftfiltering ///////////////////////////////////////////////
         static void meanShiftFiltering_gpu(const oclMat &src, oclMat dst, int sp, int sr, int maxIter, float eps)

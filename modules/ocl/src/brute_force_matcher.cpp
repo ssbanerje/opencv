@@ -244,11 +244,12 @@ static void matchDispatcher(const oclMat &query, const oclMat &train, const oclM
 {
     const oclMat zeroMask;
     const oclMat &tempMask = mask.data ? mask : zeroMask;
+    bool is_cpu = queryDeviceInfo<IS_CPU_DEVICE, bool>();
     if (query.cols <= 64)
     {
         matchUnrolledCached<16, 64>(query, train, tempMask, trainIdx, distance, distType);
     }
-    else if (query.cols <= 128)
+    else if (query.cols <= 128 && !is_cpu)
     {
         matchUnrolledCached<16, 128>(query, train, tempMask, trainIdx,  distance, distType);
     }
@@ -263,11 +264,12 @@ static void matchDispatcher(const oclMat &query, const oclMat *trains, int n, co
 {
     const oclMat zeroMask;
     const oclMat &tempMask = mask.data ? mask : zeroMask;
+    bool is_cpu = queryDeviceInfo<IS_CPU_DEVICE, bool>();
     if (query.cols <= 64)
     {
         matchUnrolledCached<16, 64>(query, trains, n, tempMask, trainIdx, imgIdx, distance, distType);
     }
-    else if (query.cols <= 128)
+    else if (query.cols <= 128 && !is_cpu)
     {
         matchUnrolledCached<16, 128>(query, trains, n, tempMask, trainIdx, imgIdx, distance, distType);
     }
@@ -283,11 +285,12 @@ static void matchDispatcher(const oclMat &query, const oclMat &train, float maxD
 {
     const oclMat zeroMask;
     const oclMat &tempMask = mask.data ? mask : zeroMask;
+    bool is_cpu = queryDeviceInfo<IS_CPU_DEVICE, bool>();
     if (query.cols <= 64)
     {
         matchUnrolledCached<16, 64>(query, train, maxDistance, tempMask, trainIdx, distance, nMatches, distType);
     }
-    else if (query.cols <= 128)
+    else if (query.cols <= 128 && !is_cpu)
     {
         matchUnrolledCached<16, 128>(query, train, maxDistance, tempMask, trainIdx, distance, nMatches, distType);
     }
@@ -465,11 +468,12 @@ static void calcDistanceDispatcher(const oclMat &query, const oclMat &train, con
 static void match2Dispatcher(const oclMat &query, const oclMat &train, const oclMat &mask,
                       const oclMat &trainIdx, const oclMat &distance, int distType)
 {
+    bool is_cpu = queryDeviceInfo<IS_CPU_DEVICE, bool>();
     if (query.cols <= 64)
     {
         knn_matchUnrolledCached<16, 64>(query, train, mask, trainIdx, distance, distType);
     }
-    else if (query.cols <= 128)
+    else if (query.cols <= 128 && !is_cpu)
     {
         knn_matchUnrolledCached<16, 128>(query, train, mask, trainIdx, distance, distType);
     }
@@ -844,8 +848,8 @@ void cv::ocl::BruteForceMatcher_OCL_base::knnMatch2Collection(const oclMat &quer
     if (query.empty() || trainCollection.empty())
         return;
 
-    typedef void (*caller_t)(const oclMat & query, const oclMat & trains, const oclMat & masks,
-                             const oclMat & trainIdx, const oclMat & imgIdx, const oclMat & distance);
+    // typedef void (*caller_t)(const oclMat & query, const oclMat & trains, const oclMat & masks,
+    //                          const oclMat & trainIdx, const oclMat & imgIdx, const oclMat & distance);
 
     CV_Assert(query.channels() == 1 && query.depth() < CV_64F);
 
@@ -992,7 +996,7 @@ void cv::ocl::BruteForceMatcher_OCL_base::knnMatch(const oclMat &query, std::vec
 
 // radiusMatchSingle
 void cv::ocl::BruteForceMatcher_OCL_base::radiusMatchSingle(const oclMat &query, const oclMat &train,
-        oclMat &trainIdx, oclMat &distance, oclMat &nMatches, float maxDistance, const oclMat &mask)
+        oclMat &trainIdx,   oclMat &distance, oclMat &nMatches, float maxDistance, const oclMat &mask)
 {
     if (query.empty() || train.empty())
         return;
@@ -1094,9 +1098,9 @@ void cv::ocl::BruteForceMatcher_OCL_base::radiusMatchCollection(const oclMat &qu
     if (query.empty() || empty())
         return;
 
+#if 0
     typedef void (*caller_t)(const oclMat & query, const oclMat * trains, int n, float maxDistance, const oclMat * masks,
                              const oclMat & trainIdx, const oclMat & imgIdx, const oclMat & distance, const oclMat & nMatches);
-#if 0
     static const caller_t callers[3][6] =
     {
         {
