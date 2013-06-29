@@ -11,7 +11,7 @@
 //                For Open Source Computer Vision Library
 //
 // Copyright (C) 2000-2008, Intel Corporation, all rights reserved.
-// Copyright (C) 2009, Willow Garage Inc., all rights reserved.
+// Copyright (C) 2009-2011, Willow Garage Inc., all rights reserved.
 // Third party copyrights are property of their respective owners.
 //
 // Redistribution and use in source and binary forms, with or without modification,
@@ -40,86 +40,25 @@
 //
 //M*/
 
-#include "test_precomp.hpp"
+// Defines for Python 2/3 compatibility.
+#ifndef __PYCOMPAT_HPP__
+#define __PYCOMPAT_HPP__
 
-#ifdef HAVE_NVCUVID
+#if PY_MAJOR_VERSION >= 3
+// Python3 treats all ints as longs, PyInt_X functions have been removed.
+#define PyInt_Check PyLong_Check
+#define PyInt_CheckExact PyLong_CheckExact
+#define PyInt_AsLong PyLong_AsLong
+#define PyInt_AS_LONG PyLong_AS_LONG
+#define PyInt_FromLong PyLong_FromLong
+#define PyNumber_Int PyNumber_Long
 
-PARAM_TEST_CASE(Video, cv::gpu::DeviceInfo, std::string)
-{
-};
+// Python3 strings are unicode, these defines mimic the Python2 functionality.
+#define PyString_Check PyUnicode_Check
+#define PyString_FromString PyUnicode_FromString
+#define PyString_AsString PyUnicode_AsUTF8
+#define PyString_FromStringAndSize PyUnicode_FromStringAndSize
+#define PyString_Size PyUnicode_GET_SIZE
+#endif
 
-//////////////////////////////////////////////////////
-// VideoReader
-
-GPU_TEST_P(Video, Reader)
-{
-    cv::gpu::setDevice(GET_PARAM(0).deviceID());
-
-    const std::string inputFile = std::string(cvtest::TS::ptr()->get_data_path()) + "video/" + GET_PARAM(1);
-
-    cv::Ptr<cv::gpucodec::VideoReader> reader = cv::gpucodec::createVideoReader(inputFile);
-
-    cv::gpu::GpuMat frame;
-
-    for (int i = 0; i < 10; ++i)
-    {
-        ASSERT_TRUE(reader->nextFrame(frame));
-        ASSERT_FALSE(frame.empty());
-    }
-}
-
-//////////////////////////////////////////////////////
-// VideoWriter
-
-#ifdef WIN32
-
-GPU_TEST_P(Video, Writer)
-{
-    cv::gpu::setDevice(GET_PARAM(0).deviceID());
-
-    const std::string inputFile = std::string(cvtest::TS::ptr()->get_data_path()) + "video/" + GET_PARAM(1);
-
-    std::string outputFile = cv::tempfile(".avi");
-    const double FPS = 25.0;
-
-    cv::VideoCapture reader(inputFile);
-    ASSERT_TRUE(reader.isOpened());
-
-    cv::Ptr<cv::gpucodec::VideoWriter> d_writer;
-
-    cv::Mat frame;
-    cv::gpu::GpuMat d_frame;
-
-    for (int i = 0; i < 10; ++i)
-    {
-        reader >> frame;
-        ASSERT_FALSE(frame.empty());
-
-        d_frame.upload(frame);
-
-        if (d_writer.empty())
-            d_writer = cv::gpucodec::createVideoWriter(outputFile, frame.size(), FPS);
-
-        d_writer->write(d_frame);
-    }
-
-    reader.release();
-    d_writer.release();
-
-    reader.open(outputFile);
-    ASSERT_TRUE(reader.isOpened());
-
-    for (int i = 0; i < 5; ++i)
-    {
-        reader >> frame;
-        ASSERT_FALSE(frame.empty());
-    }
-}
-
-#endif // WIN32
-
-INSTANTIATE_TEST_CASE_P(GPU_Codec, Video, testing::Combine(
-    ALL_DEVICES,
-    testing::Values(std::string("768x576.avi"), std::string("1920x1080.avi"))));
-
-#endif // HAVE_NVCUVID
+#endif // END HEADER GUARD
