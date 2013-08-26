@@ -10,7 +10,7 @@ ocv_add_module(highgui opencv_imgproc OPTIONAL opencv_androidcamera)
 ocv_clear_vars(GRFMT_LIBS)
 
 if(HAVE_PNG OR HAVE_TIFF OR HAVE_OPENEXR)
-  ocv_include_directories(${ZLIB_INCLUDE_DIR})
+  ocv_include_directories(${ZLIB_INCLUDE_DIRS})
   list(APPEND GRFMT_LIBS ${ZLIB_LIBRARIES})
 endif()
 
@@ -64,7 +64,6 @@ set(highgui_srcs
     src/cap_images.cpp
     src/cap_ffmpeg.cpp
     src/loadsave.cpp
-    src/precomp.cpp
     src/utils.cpp
     src/window.cpp
     )
@@ -216,7 +215,7 @@ endif()
 if(HAVE_QUICKTIME)
   list(APPEND highgui_srcs src/cap_qt.cpp)
   list(APPEND HIGHGUI_LIBRARIES "-framework Carbon" "-framework QuickTime" "-framework CoreFoundation" "-framework QuartzCore")
-elseif(APPLE)
+elseif(HAVE_QTKIT)
   list(APPEND highgui_srcs src/cap_qtkit.mm)
   list(APPEND HIGHGUI_LIBRARIES "-framework QTKit" "-framework QuartzCore" "-framework AppKit")
 endif()
@@ -293,11 +292,6 @@ if(WIN32 AND WITH_FFMPEG)
   set(ffmpeg_bare_name_ver "opencv_ffmpeg${OPENCV_DLLVERSION}${FFMPEG_SUFFIX}.dll")
   set(ffmpeg_path "${OpenCV_SOURCE_DIR}/3rdparty/ffmpeg/${ffmpeg_bare_name}")
 
-  #if(MSVC AND CMAKE_VERSION VERSION_GREATER "2.8.2")
-  #  add_custom_command(TARGET ${the_module} POST_BUILD
-  #                     COMMAND ${CMAKE_COMMAND} -E copy "${ffmpeg_path}" "${EXECUTABLE_OUTPUT_PATH}/$<CONFIGURATION>/${ffmpeg_bare_name_ver}"
-  #                     COMMENT "Copying ${ffmpeg_path} to the output directory")
-  #else
   if(MSVC_IDE)
     add_custom_command(TARGET ${the_module} POST_BUILD
                        COMMAND ${CMAKE_COMMAND} -E copy "${ffmpeg_path}" "${EXECUTABLE_OUTPUT_PATH}/Release/${ffmpeg_bare_name_ver}"

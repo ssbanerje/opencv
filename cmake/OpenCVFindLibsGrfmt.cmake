@@ -6,22 +6,21 @@
 if(BUILD_ZLIB)
   ocv_clear_vars(ZLIB_FOUND)
 else()
-  include(FindZLIB)
+  find_package(ZLIB "${MIN_VER_ZLIB}")
   if(ZLIB_FOUND AND ANDROID)
-    if(ZLIB_LIBRARY STREQUAL "${ANDROID_SYSROOT}/usr/lib/libz.so")
-      set(ZLIB_LIBRARY z)
+    if(ZLIB_LIBRARIES STREQUAL "${ANDROID_SYSROOT}/usr/lib/libz.so")
       set(ZLIB_LIBRARIES z)
     endif()
   endif()
 endif()
 
 if(NOT ZLIB_FOUND)
-  ocv_clear_vars(ZLIB_LIBRARY ZLIB_LIBRARIES ZLIB_INCLUDE_DIR)
+  ocv_clear_vars(ZLIB_LIBRARY ZLIB_LIBRARIES ZLIB_INCLUDE_DIRS)
 
   set(ZLIB_LIBRARY zlib)
-  set(ZLIB_LIBRARIES ${ZLIB_LIBRARY})
   add_subdirectory("${OpenCV_SOURCE_DIR}/3rdparty/zlib")
-  set(ZLIB_INCLUDE_DIR "${${ZLIB_LIBRARY}_SOURCE_DIR}" "${${ZLIB_LIBRARY}_BINARY_DIR}")
+  set(ZLIB_INCLUDE_DIRS "${${ZLIB_LIBRARY}_SOURCE_DIR}" "${${ZLIB_LIBRARY}_BINARY_DIR}")
+  set(ZLIB_LIBRARIES ${ZLIB_LIBRARY})
 
   ocv_parse_header2(ZLIB "${${ZLIB_LIBRARY}_SOURCE_DIR}/zlib.h" ZLIB_VERSION)
 endif()
@@ -198,9 +197,4 @@ if(WITH_OPENEXR)
   endif()
 
   set(HAVE_OPENEXR YES)
-endif()
-
-#cmake 2.8.2 bug - it fails to determine zlib version
-if(ZLIB_FOUND)
-  ocv_parse_header2(ZLIB "${ZLIB_INCLUDE_DIR}/zlib.h" ZLIB_VERSION)
 endif()
