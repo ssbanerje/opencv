@@ -689,6 +689,23 @@ bool pyopencv_to(PyObject* obj, Point2f& p, const char* name)
 }
 
 template<>
+bool pyopencv_to(PyObject* obj, Point2d& p, const char* name)
+{
+    (void)name;
+    if(!obj || obj == Py_None)
+        return true;
+    if(!!PyComplex_CheckExact(obj))
+    {
+        Py_complex c = PyComplex_AsCComplex(obj);
+        p.x = saturate_cast<double>(c.real);
+        p.y = saturate_cast<double>(c.imag);
+        return true;
+    }
+    return PyArg_ParseTuple(obj, "dd", &p.x, &p.y) > 0;
+}
+
+
+template<>
 PyObject* pyopencv_from(const Point& p)
 {
     return Py_BuildValue("(ii)", p.x, p.y);
@@ -1058,7 +1075,7 @@ bool pyopencv_to(PyObject* obj, cv::flann::SearchParams & value, const char * na
 template <typename T>
 bool pyopencv_to(PyObject *o, Ptr<T>& p, const char *name)
 {
-    p = new T();
+    p = makePtr<T>();
     return pyopencv_to(o, *p, name);
 }
 
