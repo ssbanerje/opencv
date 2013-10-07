@@ -5,7 +5,7 @@
 
 SET(OPENCV_CPP_SAMPLES_REQUIRED_DEPS opencv_core opencv_flann opencv_imgproc
     opencv_highgui opencv_ml opencv_video opencv_objdetect opencv_photo opencv_nonfree opencv_softcascade
-    opencv_features2d opencv_calib3d opencv_legacy opencv_contrib opencv_stitching opencv_videostab opencv_bioinspired)
+    opencv_features2d opencv_calib3d opencv_legacy opencv_contrib opencv_stitching opencv_videostab opencv_bioinspired opencv_shape)
 
 ocv_check_dependencies(${OPENCV_CPP_SAMPLES_REQUIRED_DEPS})
 
@@ -82,6 +82,8 @@ if(BUILD_EXAMPLES AND OCV_DEPENDENCIES_FOUND)
   if(NOT HAVE_opencv_cudaarithm OR NOT HAVE_opencv_cudafilters)
     ocv_list_filterout(cpp_samples "/gpu/")
   endif()
+
+  ocv_list_filterout(cpp_samples "viz")
 
   foreach(sample_filename ${cpp_samples})
     get_filename_component(sample ${sample_filename} NAME_WE)
