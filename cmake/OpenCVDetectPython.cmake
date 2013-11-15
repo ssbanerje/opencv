@@ -12,7 +12,10 @@ if(WIN32 AND NOT PYTHON_EXECUTABLE)
     )
   endforeach()
 endif()
+find_host_package(PythonInterp 2.7)
+if(NOT PYTHONINTERP_FOUND)
 find_host_package(PythonInterp "${MIN_VER_PYTHON}")
+endif()
 
 unset(HAVE_SPHINX CACHE)
 
@@ -20,6 +23,7 @@ if(PYTHONINTERP_FOUND)
   set(PYTHON_VERSION_MAJOR_MINOR "${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}")
 
   if(NOT ANDROID AND NOT IOS)
+    ocv_check_environment_variables(PYTHON_LIBRARY PYTHON_INCLUDE_DIR)
     find_host_package(PythonLibs "${PYTHON_VERSION_STRING}" EXACT)
   endif()
 

@@ -50,6 +50,7 @@
 
 #include "opencv2/core/private.hpp"
 #include "opencv2/core/private.cuda.hpp"
+#include "opencv2/core/ocl.hpp"
 
 #include "opencv2/core/private.hpp"
 
@@ -118,7 +119,7 @@ extern const uchar g_Saturate8u[];
 
 #if defined WIN32 || defined _WIN32
 void deleteThreadAllocData();
-void deleteThreadRNGData();
+void deleteThreadData();
 #endif
 
 template<typename T1, typename T2=T1, typename T3=T1> struct OpAdd
@@ -227,6 +228,19 @@ inline bool checkScalar(const Mat& sc, int atype, int sckind, int akind)
 }
 
 void convertAndUnrollScalar( const Mat& sc, int buftype, uchar* scbuf, size_t blocksize );
+
+struct TLSData
+{
+    TLSData();
+    RNG rng;
+    int device;
+    ocl::Queue oclQueue;
+    int useOpenCL; // 1 - use, 0 - do not use, -1 - auto/not initialized
+
+    static TLSData* get();
+};
+
+namespace ocl { MatAllocator* getOpenCLAllocator(); }
 
 }
 

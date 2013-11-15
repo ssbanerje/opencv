@@ -90,7 +90,7 @@ public:
 
     int code; ///< error code @see CVStatus
     String err; ///< error description
-    String func; ///< function name. Available only when the compiler supports __func__ macro
+    String func; ///< function name. Available only when the compiler supports getting it
     String file; ///< source file name where the error has occured
     int line; ///< line number in the source file where the error has occured
 };
@@ -157,6 +157,9 @@ enum { REDUCE_SUM = 0,
 
 //! swaps two matrices
 CV_EXPORTS void swap(Mat& a, Mat& b);
+
+//! swaps two umatrices
+CV_EXPORTS void swap( UMat& a, UMat& b );
 
 //! 1D interpolation function: returns coordinate of the "donor" pixel for the specified location p.
 CV_EXPORTS_W int borderInterpolate(int p, int len, int borderType);
@@ -439,7 +442,7 @@ CV_EXPORTS void calcCovarMatrix( const Mat* samples, int nsamples, Mat& covar, M
 
 //! computes covariation matrix of a set of samples
 CV_EXPORTS_W void calcCovarMatrix( InputArray samples, OutputArray covar,
-                                   OutputArray mean, int flags, int ctype = CV_64F);
+                                   InputOutputArray mean, int flags, int ctype = CV_64F);
 
 CV_EXPORTS_W void PCACompute(InputArray data, InputOutputArray mean,
                              OutputArray eigenvectors, int maxComponents = 0);
