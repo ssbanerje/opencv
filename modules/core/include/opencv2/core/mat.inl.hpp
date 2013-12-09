@@ -1531,7 +1531,9 @@ template<typename _Tp> template<int m, int n> inline
 Mat_<_Tp>::operator Matx<typename DataType<_Tp>::channel_type, m, n>() const
 {
     CV_Assert(n % DataType<_Tp>::channels == 0);
-    return this->Mat::operator Matx<typename DataType<_Tp>::channel_type, m, n>();
+
+    Matx<typename DataType<_Tp>::channel_type, m, n> res = this->Mat::operator Matx<typename DataType<_Tp>::channel_type, m, n>();
+    return res;
 }
 
 template<typename _Tp> inline
@@ -3128,14 +3130,6 @@ cols(1), allocator(0), u(0), offset(0), size(&rows)
         Mat((int)vec.size(), 1, DataType<_Tp>::type, (uchar*)&vec[0]).copyTo(*this);
 }
 
-
-inline
-UMat::~UMat()
-{
-    release();
-    if( step.p != step.buf )
-        fastFree(step.p);
-}
 
 inline
 UMat& UMat::operator = (const UMat& m)

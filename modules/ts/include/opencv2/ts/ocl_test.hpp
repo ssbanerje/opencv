@@ -42,10 +42,10 @@
 #ifndef __OPENCV_TS_OCL_TEST_HPP__
 #define __OPENCV_TS_OCL_TEST_HPP__
 
-#ifdef HAVE_OPENCL
-
-#include "cvconfig.h"
+#include "cvconfig.h" // to get definition of HAVE_OPENCL
 #include "opencv2/opencv_modules.hpp"
+
+#ifdef HAVE_OPENCL
 
 #include "opencv2/ts.hpp"
 
@@ -123,7 +123,7 @@ using perf::MatType;
 
 #define OCL_RNG_SEED 123456
 
-struct TestUtils
+struct CV_EXPORTS TestUtils
 {
     cv::RNG rng;
 
@@ -258,19 +258,19 @@ struct TestUtils
     }
 };
 
-#define TEST_DECLARE_INPUT_PARATEMER(name) Mat name, name ## _roi; UMat u ## name, u ## name ## _roi;
-#define TEST_DECLARE_OUTPUT_PARATEMER(name) TEST_DECLARE_INPUT_PARATEMER(name)
+#define TEST_DECLARE_INPUT_PARAMETER(name) Mat name, name ## _roi; UMat u ## name, u ## name ## _roi;
+#define TEST_DECLARE_OUTPUT_PARAMETER(name) TEST_DECLARE_INPUT_PARAMETER(name)
 
 #define UMAT_UPLOAD_INPUT_PARAMETER(name) \
 { \
     name.copyTo(u ## name); \
-    Size wholeSize; Point ofs; name ## _roi.locateROI(wholeSize, ofs); \
+    Size _wholeSize; Point ofs; name ## _roi.locateROI(_wholeSize, ofs); \
     u ## name ## _roi = u ## name(Rect(ofs.x, ofs.y, name ## _roi.size().width, name ## _roi.size().height)); \
 }
 #define UMAT_UPLOAD_OUTPUT_PARAMETER(name) UMAT_UPLOAD_INPUT_PARAMETER(name)
 
 template <typename T>
-struct TSTestWithParam : public TestUtils, public ::testing::TestWithParam<T>
+struct CV_EXPORTS TSTestWithParam : public TestUtils, public ::testing::TestWithParam<T>
 {
 
 };
@@ -305,7 +305,9 @@ IMPLEMENT_PARAM_CLASS(Channels, int)
 #define OCL_ALL_DEPTHS Values(CV_8U, CV_8S, CV_16U, CV_16S, CV_32S, CV_32F)
 #define OCL_ALL_CHANNELS Values(1, 2, 3, 4)
 
-CV_ENUM(Interpolation, INTER_NEAREST, INTER_LINEAR, INTER_CUBIC)
+CV_ENUM(Interpolation, INTER_NEAREST, INTER_LINEAR, INTER_CUBIC, INTER_AREA)
+CV_ENUM(ThreshOp, THRESH_BINARY, THRESH_BINARY_INV, THRESH_TRUNC, THRESH_TOZERO, THRESH_TOZERO_INV)
+CV_ENUM(BorderType, BORDER_REPLICATE, BORDER_REFLECT, BORDER_WRAP, BORDER_REFLECT_101)
 
 #define OCL_INSTANTIATE_TEST_CASE_P(prefix, test_case_name, generator) \
     INSTANTIATE_TEST_CASE_P(OCL_ ## prefix, test_case_name, generator)

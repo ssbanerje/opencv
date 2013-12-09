@@ -152,7 +152,7 @@ public:
         task = new( tbb::task::allocate_root() ) TBBApproximateSynchronizerTask( *this );
         tbb::task::enqueue(*task);
 #else
-        task->reset( new ApproximateSynchronizer( *this ) );
+        task.reset( new ApproximateSynchronizer( *this ) );
 #endif
     }
 
@@ -1047,7 +1047,7 @@ double CvCapture_OpenNI::getImageGeneratorProperty( int propIdx )
         propValue = (double)imageGenerator.GetTimestamp();
         break;
     case CV_CAP_PROP_POS_FRAMES :
-        propValue = imageGenerator.GetFrameID();
+        propValue = (double)imageGenerator.GetFrameID();
         break;
     default :
         CV_Error( CV_StsBadArg, cv::format("Image generator does not support such parameter (propIdx=%d) for getting.\n", propIdx) );

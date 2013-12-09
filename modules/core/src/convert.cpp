@@ -41,6 +41,7 @@
 //M*/
 
 #include "precomp.hpp"
+#include "opencl_kernels.hpp"
 
 namespace cv
 {
@@ -263,8 +264,50 @@ void cv::split(const Mat& src, Mat* mv)
     }
 }
 
+namespace cv {
+
+static bool ocl_split( InputArray _m, OutputArrayOfArrays _mv )
+{
+    int type = _m.type(), depth = CV_MAT_DEPTH(type), cn = CV_MAT_CN(type);
+
+    String dstargs, dstdecl, processelem;
+    for (int i = 0; i < cn; ++i)
+    {
+        dstargs += format("DECLARE_DST_PARAM(%d)", i);
+        dstdecl += format("DECLARE_DATA(%d)", i);
+        processelem += format("PROCESS_ELEM(%d)", i);
+    }
+
+    ocl::Kernel k("split", ocl::core::split_merge_oclsrc,
+                  format("-D T=%s -D OP_SPLIT -D cn=%d -D DECLARE_DST_PARAMS=%s "
+                         "-D DECLARE_DATA_N=%s -D PROCESS_ELEMS_N=%s",
+                         ocl::memopTypeToStr(depth), cn, dstargs.c_str(),
+                         dstdecl.c_str(), processelem.c_str()));
+    if (k.empty())
+        return false;
+
+    Size size = _m.size();
+    std::vector<UMat> & dst = *(std::vector<UMat> *)_mv.getObj();
+    dst.resize(cn);
+    for (int i = 0; i < cn; ++i)
+        dst[i].create(size, depth);
+
+    int argidx = k.set(0, ocl::KernelArg::ReadOnly(_m.getUMat()));
+    for (int i = 0; i < cn; ++i)
+        argidx = k.set(argidx, ocl::KernelArg::WriteOnlyNoSize(dst[i]));
+
+    size_t globalsize[2] = { size.width, size.height };
+    return k.run(2, globalsize, NULL, false);
+}
+
+}
+
 void cv::split(InputArray _m, OutputArrayOfArrays _mv)
 {
+    if (ocl::useOpenCL() && _m.dims() <= 2 && _mv.isUMatVector() &&
+            ocl_split(_m, _mv))
+        return;
+
     Mat m = _m.getMat();
     if( m.empty() )
     {
@@ -352,8 +395,58 @@ void cv::merge(const Mat* mv, size_t n, OutputArray _dst)
     }
 }
 
+namespace cv {
+
+static bool ocl_merge( InputArrayOfArrays _mv, OutputArray _dst )
+{
+    const std::vector<UMat> & src = *(const std::vector<UMat> *)(_mv.getObj());
+    CV_Assert(!src.empty());
+
+    int type = src[0].type(), depth = CV_MAT_DEPTH(type);
+    Size size = src[0].size();
+
+    size_t srcsize = src.size();
+    for (size_t i = 0; i < srcsize; ++i)
+    {
+        int itype = src[i].type(), icn = CV_MAT_CN(itype), idepth = CV_MAT_DEPTH(itype);
+        if (src[i].dims > 2 || icn != 1)
+            return false;
+        CV_Assert(size == src[i].size() && depth == idepth);
+    }
+
+    String srcargs, srcdecl, processelem;
+    for (size_t i = 0; i < srcsize; ++i)
+    {
+        srcargs += format("DECLARE_SRC_PARAM(%d)", i);
+        srcdecl += format("DECLARE_DATA(%d)", i);
+        processelem += format("PROCESS_ELEM(%d)", i);
+    }
+
+    ocl::Kernel k("merge", ocl::core::split_merge_oclsrc,
+                  format("-D OP_MERGE -D cn=%d -D T=%s -D DECLARE_SRC_PARAMS_N=%s -D DECLARE_DATA_N=%s -D PROCESS_ELEMS_N=%s",
+                         (int)srcsize, ocl::memopTypeToStr(depth), srcargs.c_str(), srcdecl.c_str(), processelem.c_str()));
+    if (k.empty())
+        return false;
+
+    _dst.create(size, CV_MAKE_TYPE(depth, (int)srcsize));
+    UMat dst = _dst.getUMat();
+
+    int argidx = 0;
+    for (size_t i = 0; i < srcsize; ++i)
+        argidx = k.set(argidx, ocl::KernelArg::ReadOnlyNoSize(src[i]));
+    k.set(argidx, ocl::KernelArg::WriteOnly(dst));
+
+    size_t globalsize[2] = { dst.cols, dst.rows };
+    return k.run(2, globalsize, NULL, false);
+}
+
+}
+
 void cv::merge(InputArrayOfArrays _mv, OutputArray _dst)
 {
+    if (ocl::useOpenCL() && _mv.isUMatVector() && _dst.isUMat() && ocl_merge(_mv, _dst))
+        return;
+
     std::vector<Mat> mv;
     _mv.getMatVector(mv);
     merge(!mv.empty() ? &mv[0] : 0, mv.size(), _dst);
@@ -1209,16 +1302,45 @@ static LUTFunc lutTab[] =
 
 }
 
+namespace cv {
+
+static bool ocl_LUT(InputArray _src, InputArray _lut, OutputArray _dst)
+{
+    int dcn = _dst.channels(), lcn = _lut.channels(), dtype = _dst.type();
+
+    if (_src.dims() > 2)
+        return false;
+
+    UMat src = _src.getUMat(), lut = _lut.getUMat();
+    _dst.create(src.size(), dtype);
+    UMat dst = _dst.getUMat();
+
+    ocl::Kernel k("LUT", ocl::core::lut_oclsrc,
+                  format("-D dcn=%d -D lcn=%d -D srcT=%s -D dstT=%s", dcn, lcn,
+                         ocl::typeToStr(src.depth()), ocl::typeToStr(dst.depth())));
+    k.args(ocl::KernelArg::ReadOnlyNoSize(src), ocl::KernelArg::ReadOnlyNoSize(lut),
+           ocl::KernelArg::WriteOnly(dst));
+
+    size_t globalSize[2] = { dst.cols, dst.rows };
+    return k.run(2, globalSize, NULL, false);
+}
+
+} // cv
+
 void cv::LUT( InputArray _src, InputArray _lut, OutputArray _dst )
 {
-    Mat src = _src.getMat(), lut = _lut.getMat();
-    int cn = src.channels();
-    int lutcn = lut.channels();
+    int cn = _src.channels(), depth = _src.depth();
+    int lutcn = _lut.channels();
 
     CV_Assert( (lutcn == cn || lutcn == 1) &&
-        lut.total() == 256 && lut.isContinuous() &&
-        (src.depth() == CV_8U || src.depth() == CV_8S) );
-    _dst.create( src.dims, src.size, CV_MAKETYPE(lut.depth(), cn));
+        _lut.total() == 256 && _lut.isContinuous() &&
+        (depth == CV_8U || depth == CV_8S) );
+
+    if (ocl::useOpenCL() && _dst.isUMat() && ocl_LUT(_src, _lut, _dst))
+        return;
+
+    Mat src = _src.getMat(), lut = _lut.getMat();
+    _dst.create(src.dims, src.size, CV_MAKETYPE(_lut.depth(), cn));
     Mat dst = _dst.getMat();
 
     LUTFunc func = lutTab[lut.depth()];

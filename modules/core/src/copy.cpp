@@ -6,7 +6,6 @@
 //  If you do not agree to this license, do not download, install,
 //  copy or use the software.
 //
-//
 //                           License Agreement
 //                For Open Source Computer Vision Library
 //
@@ -47,6 +46,7 @@
 // */
 
 #include "precomp.hpp"
+#include "opencl_kernels.hpp"
 
 namespace cv
 {
@@ -477,11 +477,59 @@ flipVert( const uchar* src0, size_t sstep, uchar* dst0, size_t dstep, Size size,
     }
 }
 
+enum { FLIP_COLS = 1 << 0, FLIP_ROWS = 1 << 1, FLIP_BOTH = FLIP_ROWS | FLIP_COLS };
+
+static bool ocl_flip(InputArray _src, OutputArray _dst, int flipCode )
+{
+    int type = _src.type(), cn = CV_MAT_CN(type);
+
+    if (cn > 4 || cn == 3)
+        return false;
+
+    const char * kernelName;
+    int flipType;
+
+    if (flipCode == 0)
+        kernelName = "arithm_flip_rows", flipType = FLIP_ROWS;
+    else if (flipCode > 0)
+        kernelName = "arithm_flip_cols", flipType = FLIP_COLS;
+    else
+        kernelName = "arithm_flip_rows_cols", flipType = FLIP_BOTH;
+
+    Size size = _src.size();
+    int cols = size.width, rows = size.height;
+    if ((cols == 1 && flipType == FLIP_COLS) ||
+            (rows == 1 && flipType == FLIP_ROWS) ||
+            (rows == 1 && cols == 1 && flipType == FLIP_BOTH))
+    {
+        _src.copyTo(_dst);
+        return true;
+    }
+
+    ocl::Kernel k(kernelName, ocl::core::flip_oclsrc,
+        format( "-D type=%s", ocl::memopTypeToStr(type)));
+    if (k.empty())
+        return false;
+
+    _dst.create(size, type);
+    UMat src = _src.getUMat(), dst = _dst.getUMat();
+
+    cols = flipType == FLIP_COLS ? ((cols+1)/2) : cols;
+    rows = flipType & FLIP_ROWS ? ((rows+1)/2) : rows;
+
+    size_t globalsize[2] = { cols, rows };
+    return k.args(ocl::KernelArg::ReadOnlyNoSize(src), ocl::KernelArg::WriteOnly(dst), rows, cols).run(2, globalsize, NULL, false);
+}
+
 void flip( InputArray _src, OutputArray _dst, int flip_mode )
 {
-    Mat src = _src.getMat();
+    CV_Assert( _src.dims() <= 2 );
 
-    CV_Assert( src.dims <= 2 );
+    bool use_opencl = ocl::useOpenCL() && _dst.isUMat();
+    if ( use_opencl && ocl_flip(_src,_dst, flip_mode))
+        return;
+
+    Mat src = _src.getMat();
     _dst.create( src.size(), src.type() );
     Mat dst = _dst.getMat();
     size_t esz = src.elemSize();
@@ -701,11 +749,72 @@ void copyMakeConstBorder_8u( const uchar* src, size_t srcstep, cv::Size srcroi,
 
 }
 
+namespace cv {
+
+static bool ocl_copyMakeBorder( InputArray _src, OutputArray _dst, int top, int bottom,
+                                int left, int right, int borderType, const Scalar& value )
+{
+    int type = _src.type(), cn = CV_MAT_CN(type);
+    bool isolated = (borderType & BORDER_ISOLATED) != 0;
+    borderType &= ~cv::BORDER_ISOLATED;
+
+    if ( !(borderType == BORDER_CONSTANT || borderType == BORDER_REPLICATE || borderType == BORDER_REFLECT ||
+           borderType == BORDER_WRAP || borderType == BORDER_REFLECT_101) ||
+         cn == 3 || cn > 4)
+        return false;
+
+    const char * const borderMap[] = { "BORDER_CONSTANT", "BORDER_REPLICATE", "BORDER_REFLECT", "BORDER_WRAP", "BORDER_REFLECT_101" };
+    ocl::Kernel k("copyMakeBorder", ocl::core::copymakeborder_oclsrc,
+                  format("-D T=%s -D %s", ocl::memopTypeToStr(type), borderMap[borderType]));
+    if (k.empty())
+        return false;
+
+    UMat src = _src.getUMat();
+    if( src.isSubmatrix() && !isolated )
+    {
+        Size wholeSize;
+        Point ofs;
+        src.locateROI(wholeSize, ofs);
+        int dtop = std::min(ofs.y, top);
+        int dbottom = std::min(wholeSize.height - src.rows - ofs.y, bottom);
+        int dleft = std::min(ofs.x, left);
+        int dright = std::min(wholeSize.width - src.cols - ofs.x, right);
+        src.adjustROI(dtop, dbottom, dleft, dright);
+        top -= dtop;
+        left -= dleft;
+        bottom -= dbottom;
+        right -= dright;
+    }
+
+    _dst.create(src.rows + top + bottom, src.cols + left + right, type);
+    UMat dst = _dst.getUMat();
+
+    if (top == 0 && left == 0 && bottom == 0 && right == 0)
+    {
+        if(src.u != dst.u || src.step != dst.step)
+            src.copyTo(dst);
+        return true;
+    }
+
+    k.args(ocl::KernelArg::ReadOnly(src), ocl::KernelArg::WriteOnly(dst),
+           top, left, ocl::KernelArg::Constant(Mat(1, 1, type, value)));
+
+    size_t globalsize[2] = { dst.cols, dst.rows };
+    return k.run(2, globalsize, NULL, false);
+}
+
+}
+
 void cv::copyMakeBorder( InputArray _src, OutputArray _dst, int top, int bottom,
                          int left, int right, int borderType, const Scalar& value )
 {
-    Mat src = _src.getMat();
     CV_Assert( top >= 0 && bottom >= 0 && left >= 0 && right >= 0 );
+
+    if (ocl::useOpenCL() && _dst.isUMat() && _src.dims() <= 2 &&
+            ocl_copyMakeBorder(_src, _dst, top, bottom, left, right, borderType, value))
+        return;
+
+    Mat src = _src.getMat();
 
     if( src.isSubmatrix() && (borderType & BORDER_ISOLATED) == 0 )
     {
