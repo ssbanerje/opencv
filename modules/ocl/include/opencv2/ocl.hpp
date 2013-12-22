@@ -1,45 +1,11 @@
-/*M///////////////////////////////////////////////////////////////////////////////////////
-//
-//  IMPORTANT: READ BEFORE DOWNLOADING, COPYING, INSTALLING OR USING.
-//
-//  By downloading, copying, installing or using the software you agree to this license.
-//  If you do not agree to this license, do not download, install,
-//  copy or use the software.
-//
-//
-//                           License Agreement
-//                For Open Source Computer Vision Library
-//
+// This file is part of OpenCV project.
+// It is subject to the license terms in the LICENSE file found in the top-level directory
+// of this distribution and at http://opencv.org/license.html.
+
 // Copyright (C) 2010-2012, Institute Of Software Chinese Academy Of Science, all rights reserved.
 // Copyright (C) 2010-2012, Advanced Micro Devices, Inc., all rights reserved.
 // Copyright (C) 2010-2012, Multicoreware, Inc., all rights reserved.
 // Third party copyrights are property of their respective owners.
-//
-// Redistribution and use in source and binary forms, with or without modification,
-// are permitted provided that the following conditions are met:
-//
-//   * Redistribution's of source code must retain the above copyright notice,
-//     this list of conditions and the following disclaimer.
-//
-//   * Redistribution's in binary form must reproduce the above copyright notice,
-//     this list of conditions and the following disclaimer in the documentation
-//     and/or other materials provided with the distribution.
-//
-//   * The name of the copyright holders may not be used to endorse or promote products
-//     derived from this software without specific prior written permission.
-//
-// This software is provided by the copyright holders and contributors "as is" and
-// any express or implied warranties, including, but not limited to, the implied
-// warranties of merchantability and fitness for a particular purpose are disclaimed.
-// In no event shall the Intel Corporation or contributors be liable for any direct,
-// indirect, incidental, special, exemplary, or consequential damages
-// (including, but not limited to, procurement of substitute goods or services;
-// loss of use, data, or profits; or business interruption) however caused
-// and on any theory of liability, whether in contract, strict liability,
-// or tort (including negligence or otherwise) arising in any way out of
-// the use of this software, even if advised of the possibility of such damage.
-//
-//M*/
 
 #ifndef __OPENCV_OCL_HPP__
 #define __OPENCV_OCL_HPP__
@@ -118,6 +84,7 @@ namespace cv
             const PlatformInfo* platform;
 
             DeviceInfo();
+            ~DeviceInfo();
         };
 
         struct PlatformInfo
@@ -136,6 +103,7 @@ namespace cv
             std::vector<const DeviceInfo*> devices;
 
             PlatformInfo();
+            ~PlatformInfo();
         };
 
         //////////////////////////////// Initialization & Info ////////////////////////
@@ -150,6 +118,10 @@ namespace cv
 
         // set device you want to use
         CV_EXPORTS void setDevice(const DeviceInfo* info);
+
+        // Initialize from OpenCL handles directly.
+        // Argument types is (pointers): cl_platform_id*, cl_context*, cl_device_id*
+        CV_EXPORTS void initializeContext(void* pClPlatform, void* pClContext, void* pClDevice);
 
         enum FEATURE_TYPE
         {
@@ -378,14 +350,6 @@ namespace cv
             //! returns true if oclMatrix data is NULL
             bool empty() const;
 
-            //! returns pointer to y-th row
-            uchar* ptr(int y = 0);
-            const uchar *ptr(int y = 0) const;
-
-            //! template version of the above method
-            template<typename _Tp> _Tp *ptr(int y = 0);
-            template<typename _Tp> const _Tp *ptr(int y = 0) const;
-
             //! matrix transposition
             oclMat t() const;
 
@@ -566,6 +530,10 @@ namespace cv
         //! computes natural logarithm of absolute value of each matrix element: dst = log(abs(src))
         // supports only CV_32FC1, CV_64FC1 type
         CV_EXPORTS void log(const oclMat &src, oclMat &dst);
+
+        //! computes square root of each matrix element
+        // supports only CV_32FC1, CV_64FC1 type
+        CV_EXPORTS void sqrt(const oclMat &src, oclMat &dst);
 
         //! computes magnitude of each (x(i), y(i)) vector
         // supports only CV_32F, CV_64F type
@@ -1485,6 +1453,65 @@ namespace cv
             useHarrisDetector = useHarrisDetector_;
             harrisK = harrisK_;
         }
+
+        ////////////////////////////////// FAST Feature Detector //////////////////////////////////
+        class CV_EXPORTS FAST_OCL
+        {
+        public:
+            enum
+            {
+                X_ROW = 0,
+                Y_ROW,
+                RESPONSE_ROW,
+                ROWS_COUNT
+            };
+
+            // all features have same size
+            static const int FEATURE_SIZE = 7;
+
+            explicit FAST_OCL(int threshold, bool nonmaxSupression = true, double keypointsRatio = 0.05);
+
+            //! finds the keypoints using FAST detector
+            //! supports only CV_8UC1 images
+            void operator ()(const oclMat& image, const oclMat& mask, oclMat& keypoints);
+            void operator ()(const oclMat& image, const oclMat& mask, std::vector<KeyPoint>& keypoints);
+
+            //! download keypoints from device to host memory
+            static void downloadKeypoints(const oclMat& d_keypoints, std::vector<KeyPoint>& keypoints);
+
+            //! convert keypoints to KeyPoint vector
+            static void convertKeypoints(const Mat& h_keypoints, std::vector<KeyPoint>& keypoints);
+
+            //! release temporary buffer's memory
+            void release();
+
+            bool nonmaxSupression;
+
+            int threshold;
+
+            //! max keypoints = keypointsRatio * img.size().area()
+            double keypointsRatio;
+
+            //! find keypoints and compute it's response if nonmaxSupression is true
+            //! return count of detected keypoints
+            int calcKeyPointsLocation(const oclMat& image, const oclMat& mask);
+
+            //! get final array of keypoints
+            //! performs nonmax supression if needed
+            //! return final count of keypoints
+            int getKeyPoints(oclMat& keypoints);
+
+        private:
+            oclMat kpLoc_;
+            int count_;
+
+            oclMat score_;
+
+            oclMat d_keypoints_;
+
+            int calcKeypointsOCL(const oclMat& img, const oclMat& mask, int maxKeypoints);
+            int nonmaxSupressionOCL(oclMat& keypoints);
+        };
 
         /////////////////////////////// PyrLKOpticalFlow /////////////////////////////////////
 

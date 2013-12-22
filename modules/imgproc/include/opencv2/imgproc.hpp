@@ -1078,6 +1078,11 @@ CV_EXPORTS_W void boxFilter( InputArray src, OutputArray dst, int ddepth,
                              bool normalize = true,
                              int borderType = BORDER_DEFAULT );
 
+CV_EXPORTS_W void sqrBoxFilter( InputArray _src, OutputArray _dst, int ddepth,
+                                Size ksize, Point anchor = Point(-1, -1),
+                                bool normalize = true,
+                                int borderType = BORDER_DEFAULT );
+
 //! a synonym for normalized box filter
 CV_EXPORTS_W void blur( InputArray src, OutputArray dst,
                         Size ksize, Point anchor = Point(-1,-1),
@@ -1513,6 +1518,9 @@ CV_EXPORTS Ptr<GeneralizedHoughBallard> createGeneralizedHoughBallard();
 //! Guil, N., González-Linares, J.M. and Zapata, E.L. (1999). Bidimensional shape detection using an invariant approach. Pattern Recognition 32 (6): 1025-1038.
 //! Detects position, traslation and rotation
 CV_EXPORTS Ptr<GeneralizedHoughGuil> createGeneralizedHoughGuil();
+
+//! Performs linear blending of two images
+CV_EXPORTS void blendLinear(InputArray src1, InputArray src2, InputArray weights1, InputArray weights2, OutputArray dst);
 
 } // cv
 

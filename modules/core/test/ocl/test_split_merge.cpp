@@ -113,8 +113,7 @@ PARAM_TEST_CASE(MergeTestBase, MatDepth, Channels, bool)
 
     void Near(double threshold = 0.)
     {
-        EXPECT_MAT_NEAR(dst, udst, threshold);
-        EXPECT_MAT_NEAR(dst_roi, udst_roi, threshold);
+        OCL_EXPECT_MATS_NEAR(dst, threshold);
     }
 };
 
@@ -198,7 +197,7 @@ PARAM_TEST_CASE(SplitTestBase, MatType, Channels, bool)
 
 typedef SplitTestBase Split;
 
-OCL_TEST_P(Split, Accuracy)
+OCL_TEST_P(Split, DISABLED_Accuracy)
 {
     for (int j = 0; j < test_loop_times; j++)
     {

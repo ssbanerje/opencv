@@ -42,6 +42,14 @@
 #include "precomp.hpp"
 #include <map>
 
+#include "opencv2/core/opencl/runtime/opencl_clamdblas.hpp"
+#include "opencv2/core/opencl/runtime/opencl_clamdfft.hpp"
+
+#ifdef HAVE_OPENCL
+#include "opencv2/core/opencl/runtime/opencl_core.hpp"
+#else
+// TODO FIXIT: This file can't be build without OPENCL
+
 /*
   Part of the file is an extract from the standard OpenCL headers from Khronos site.
   Below is the original copyright.
@@ -1220,6 +1228,12 @@ OCL_FUNC(cl_int, clReleaseEvent, (cl_event event), (event))
 
 #endif
 
+#ifndef CL_VERSION_1_2
+#define CL_VERSION_1_2
+#endif
+
+#endif
+
 namespace cv { namespace ocl {
 
 struct UMat2D
@@ -1298,15 +1312,30 @@ inline bool operator < (const HashKey& h1, const HashKey& h2)
     return h1.a < h2.a || (h1.a == h2.a && h1.b < h2.b);
 }
 
+static bool g_isOpenCLInitialized = false;
+static bool g_isOpenCLAvailable = false;
+
 bool haveOpenCL()
 {
-    initOpenCLAndLoad(0);
-    return g_haveOpenCL;
+    if (!g_isOpenCLInitialized)
+    {
+        try
+        {
+            cl_uint n = 0;
+            g_isOpenCLAvailable = ::clGetPlatformIDs(0, NULL, &n) == CL_SUCCESS;
+        }
+        catch (...)
+        {
+            g_isOpenCLAvailable = false;
+        }
+        g_isOpenCLInitialized = true;
+    }
+    return g_isOpenCLAvailable;
 }
 
 bool useOpenCL()
 {
-    TLSData* data = TLSData::get();
+    CoreTLSData* data = coreTlsData.get();
     if( data->useOpenCL < 0 )
         data->useOpenCL = (int)haveOpenCL();
     return data->useOpenCL > 0;
@@ -1316,10 +1345,161 @@ void setUseOpenCL(bool flag)
 {
     if( haveOpenCL() )
     {
-        TLSData* data = TLSData::get();
+        CoreTLSData* data = coreTlsData.get();
         data->useOpenCL = flag ? 1 : 0;
     }
 }
+
+#ifdef HAVE_CLAMDBLAS
+
+class AmdBlasHelper
+{
+public:
+    static AmdBlasHelper & getInstance()
+    {
+        static AmdBlasHelper amdBlas;
+        return amdBlas;
+    }
+
+    bool isAvailable() const
+    {
+        return g_isAmdBlasAvailable;
+    }
+
+    ~AmdBlasHelper()
+    {
+        try
+        {
+            clAmdBlasTeardown();
+        }
+        catch (...) { }
+    }
+
+protected:
+    AmdBlasHelper()
+    {
+        if (!g_isAmdBlasInitialized)
+        {
+            AutoLock lock(m);
+
+            if (!g_isAmdBlasInitialized && haveOpenCL())
+            {
+                try
+                {
+                    g_isAmdBlasAvailable = clAmdBlasSetup() == clAmdBlasSuccess;
+                }
+                catch (...)
+                {
+                    g_isAmdBlasAvailable = false;
+                }
+            }
+            else
+                g_isAmdBlasAvailable = false;
+
+            g_isAmdBlasInitialized = true;
+        }
+    }
+
+private:
+    static Mutex m;
+    static bool g_isAmdBlasInitialized;
+    static bool g_isAmdBlasAvailable;
+};
+
+bool AmdBlasHelper::g_isAmdBlasAvailable = false;
+bool AmdBlasHelper::g_isAmdBlasInitialized = false;
+Mutex AmdBlasHelper::m;
+
+bool haveAmdBlas()
+{
+    return AmdBlasHelper::getInstance().isAvailable();
+}
+
+#else
+
+bool haveAmdBlas()
+{
+    return false;
+}
+
+#endif
+
+#ifdef HAVE_CLAMDFFT
+
+class AmdFftHelper
+{
+public:
+    static AmdFftHelper & getInstance()
+    {
+        static AmdFftHelper amdFft;
+        return amdFft;
+    }
+
+    bool isAvailable() const
+    {
+        return g_isAmdFftAvailable;
+    }
+
+    ~AmdFftHelper()
+    {
+        try
+        {
+//            clAmdFftTeardown();
+        }
+        catch (...) { }
+    }
+
+protected:
+    AmdFftHelper()
+    {
+        if (!g_isAmdFftInitialized)
+        {
+            AutoLock lock(m);
+
+            if (!g_isAmdFftInitialized && haveOpenCL())
+            {
+                try
+                {
+                    CV_Assert(clAmdFftInitSetupData(&setupData) == CLFFT_SUCCESS);
+                    g_isAmdFftAvailable = true;
+                }
+                catch (const Exception &)
+                {
+                    g_isAmdFftAvailable = false;
+                }
+            }
+            else
+                g_isAmdFftAvailable = false;
+
+            g_isAmdFftInitialized = true;
+        }
+    }
+
+private:
+    static clAmdFftSetupData setupData;
+    static Mutex m;
+    static bool g_isAmdFftInitialized;
+    static bool g_isAmdFftAvailable;
+};
+
+clAmdFftSetupData AmdFftHelper::setupData;
+bool AmdFftHelper::g_isAmdFftAvailable = false;
+bool AmdFftHelper::g_isAmdFftInitialized = false;
+Mutex AmdFftHelper::m;
+
+bool haveAmdFft()
+{
+    return AmdFftHelper::getInstance().isAvailable();
+}
+
+#else
+
+bool haveAmdFft()
+{
+    return false;
+}
+
+#endif
 
 void finish2()
 {
@@ -1330,21 +1510,6 @@ void finish2()
     void addref() { CV_XADD(&refcount, 1); } \
     void release() { if( CV_XADD(&refcount, -1) == 1 ) delete this; } \
     int refcount
-
-class Platform
-{
-public:
-    Platform();
-    ~Platform();
-    Platform(const Platform& p);
-    Platform& operator = (const Platform& p);
-
-    void* ptr() const;
-    static Platform& getDefault();
-protected:
-    struct Impl;
-    Impl* p;
-};
 
 struct Platform::Impl
 {
@@ -1437,6 +1602,7 @@ struct Device::Impl
     Impl(void* d)
     {
         handle = (cl_device_id)d;
+        refcount = 1;
     }
 
     template<typename _TpCL, typename _TpOut>
@@ -1549,7 +1715,11 @@ bool Device::compilerAvailable() const
 { return p ? p->getBoolProp(CL_DEVICE_COMPILER_AVAILABLE) : false; }
 
 bool Device::linkerAvailable() const
+#ifdef CL_VERSION_1_2
 { return p ? p->getBoolProp(CL_DEVICE_LINKER_AVAILABLE) : false; }
+#else
+{ CV_REQUIRE_OPENCL_1_2_ERROR; }
+#endif
 
 int Device::doubleFPConfig() const
 { return p ? p->getProp<cl_device_fp_config, int>(CL_DEVICE_DOUBLE_FP_CONFIG) : 0; }
@@ -1558,7 +1728,11 @@ int Device::singleFPConfig() const
 { return p ? p->getProp<cl_device_fp_config, int>(CL_DEVICE_SINGLE_FP_CONFIG) : 0; }
 
 int Device::halfFPConfig() const
+#ifdef CL_VERSION_1_2
 { return p ? p->getProp<cl_device_fp_config, int>(CL_DEVICE_HALF_FP_CONFIG) : 0; }
+#else
+{ CV_REQUIRE_OPENCL_1_2_ERROR; }
+#endif
 
 bool Device::endianLittle() const
 { return p ? p->getBoolProp(CL_DEVICE_ENDIAN_LITTLE) : false; }
@@ -1609,10 +1783,18 @@ size_t Device::image3DMaxDepth() const
 { return p ? p->getProp<size_t, size_t>(CL_DEVICE_IMAGE3D_MAX_DEPTH) : 0; }
 
 size_t Device::imageMaxBufferSize() const
+#ifdef CL_VERSION_1_2
 { return p ? p->getProp<size_t, size_t>(CL_DEVICE_IMAGE_MAX_BUFFER_SIZE) : 0; }
+#else
+{ CV_REQUIRE_OPENCL_1_2_ERROR; }
+#endif
 
 size_t Device::imageMaxArraySize() const
+#ifdef CL_VERSION_1_2
 { return p ? p->getProp<size_t, size_t>(CL_DEVICE_IMAGE_MAX_ARRAY_SIZE) : 0; }
+#else
+{ CV_REQUIRE_OPENCL_1_2_ERROR; }
+#endif
 
 int Device::maxClockFrequency() const
 { return p ? p->getProp<cl_uint, int>(CL_DEVICE_MAX_CLOCK_FREQUENCY) : 0; }
@@ -1704,7 +1886,12 @@ int Device::preferredVectorWidthHalf() const
 { return p ? p->getProp<cl_uint, int>(CL_DEVICE_PREFERRED_VECTOR_WIDTH_HALF) : 0; }
 
 size_t Device::printfBufferSize() const
+#ifdef CL_VERSION_1_2
 { return p ? p->getProp<size_t, size_t>(CL_DEVICE_PRINTF_BUFFER_SIZE) : 0; }
+#else
+{ CV_REQUIRE_OPENCL_1_2_ERROR; }
+#endif
+
 
 size_t Device::profilingTimerResolution() const
 { return p ? p->getProp<size_t, size_t>(CL_DEVICE_PROFILING_TIMER_RESOLUTION) : 0; }
@@ -1712,7 +1899,7 @@ size_t Device::profilingTimerResolution() const
 const Device& Device::getDefault()
 {
     const Context2& ctx = Context2::getDefault();
-    int idx = TLSData::get()->device;
+    int idx = coreTlsData.get()->device;
     return ctx.device(idx);
 }
 
@@ -1720,6 +1907,12 @@ const Device& Device::getDefault()
 
 struct Context2::Impl
 {
+    Impl()
+    {
+        refcount = 1;
+        handle = 0;
+    }
+
     Impl(int dtype0)
     {
         refcount = 1;
@@ -1802,7 +1995,6 @@ struct Context2::Impl
 
     cl_context handle;
     std::vector<Device> devices;
-    bool initialized;
 
     typedef ProgramSource2::hash_t hash_t;
 
@@ -1884,22 +2076,29 @@ const Device& Context2::device(size_t idx) const
     return !p || idx >= p->devices.size() ? dummy : p->devices[idx];
 }
 
-Context2& Context2::getDefault()
+Context2& Context2::getDefault(bool initialize)
 {
     static Context2 ctx;
-    if( !ctx.p && haveOpenCL() )
+    if(!ctx.p && haveOpenCL())
     {
-        // do not create new Context2 right away.
-        // First, try to retrieve existing context of the same type.
-        // In its turn, Platform::getContext() may call Context2::create()
-        // if there is no such context.
-        ctx.create(Device::TYPE_ACCELERATOR);
-        if(!ctx.p)
-            ctx.create(Device::TYPE_DGPU);
-        if(!ctx.p)
-            ctx.create(Device::TYPE_IGPU);
-        if(!ctx.p)
-            ctx.create(Device::TYPE_CPU);
+        if (initialize)
+        {
+            // do not create new Context2 right away.
+            // First, try to retrieve existing context of the same type.
+            // In its turn, Platform::getContext() may call Context2::create()
+            // if there is no such context.
+            ctx.create(Device::TYPE_ACCELERATOR);
+            if(!ctx.p)
+                ctx.create(Device::TYPE_DGPU);
+            if(!ctx.p)
+                ctx.create(Device::TYPE_IGPU);
+            if(!ctx.p)
+                ctx.create(Device::TYPE_CPU);
+        }
+        else
+        {
+            ctx.p = new Impl();
+        }
     }
 
     return ctx;
@@ -1910,6 +2109,30 @@ Program Context2::getProg(const ProgramSource2& prog,
 {
     return p ? p->getProg(prog, buildopts, errmsg) : Program();
 }
+
+void initializeContextFromHandle(Context2& ctx, void* platform, void* _context, void* _device)
+{
+    cl_context context = (cl_context)_context;
+    cl_device_id device = (cl_device_id)_device;
+
+    // cleanup old context
+    Context2::Impl* impl = ctx._getImpl();
+    if (impl->handle)
+    {
+        cl_int status = clReleaseContext(impl->handle);
+        (void)status;
+    }
+    impl->devices.clear();
+
+    impl->handle = context;
+    impl->devices.resize(1);
+    impl->devices[0].set(device);
+
+    Platform& p = Platform::getDefault();
+    Platform::Impl* pImpl = p._getImpl();
+    pImpl->handle = (cl_platform_id)platform;
+}
+
 
 struct Queue::Impl
 {
@@ -1932,10 +2155,15 @@ struct Queue::Impl
 
     ~Impl()
     {
-        if(handle)
+#ifdef _WIN32
+        if (!cv::__termination)
+#endif
         {
-            clFinish(handle);
-            clReleaseCommandQueue(handle);
+            if(handle)
+            {
+                clFinish(handle);
+                clReleaseCommandQueue(handle);
+            }
         }
     }
 
@@ -2001,7 +2229,7 @@ void* Queue::ptr() const
 
 Queue& Queue::getDefault()
 {
-    Queue& q = TLSData::get()->oclQueue;
+    Queue& q = coreTlsData.get()->oclQueue;
     if( !q.p && haveOpenCL() )
         q.create(Context2::getDefault());
     return q;
@@ -2635,8 +2863,6 @@ public:
     UMatData* defaultAllocate(int dims, const int* sizes, int type, void* data, size_t* step, int flags) const
     {
         UMatData* u = matStdAllocator->allocate(dims, sizes, type, data, step, flags);
-        u->urefcount = 1;
-        u->refcount = 0;
         return u;
     }
 
@@ -2678,7 +2904,6 @@ public:
         u->data = 0;
         u->size = total;
         u->handle = handle;
-        u->urefcount = 1;
         u->flags = flags0;
 
         return u;
@@ -2717,7 +2942,6 @@ public:
         }
         if(accessFlags & ACCESS_WRITE)
             u->markHostCopyObsolete(true);
-        CV_XADD(&u->urefcount, 1);
         return true;
     }
 
@@ -2755,6 +2979,9 @@ public:
     {
         if(!u)
             return;
+
+        CV_Assert(u->urefcount >= 0);
+        CV_Assert(u->refcount >= 0);
 
         // TODO: !!! when we add Shared Virtual Memory Support,
         // this function (as well as the others) should be corrected
