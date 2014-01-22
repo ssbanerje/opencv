@@ -107,7 +107,7 @@ std::wstring GetTempPathWinRT()
     if (FAILED(WindowsCreateStringReference(RuntimeClass_Windows_Storage_ApplicationData,
                                             (UINT32)wcslen(RuntimeClass_Windows_Storage_ApplicationData), &hstrHead, &str)))
         return wstr;
-    if (FAILED(Windows::Foundation::GetActivationFactory(str, appdataFactory.ReleaseAndGetAddressOf())))
+    if (FAILED(RoGetActivationFactory(str, IID_PPV_ARGS(appdataFactory.ReleaseAndGetAddressOf()))))
         return wstr;
     if (FAILED(appdataFactory->get_Current(appdataRef.ReleaseAndGetAddressOf())))
         return wstr;
@@ -849,7 +849,9 @@ public:
 };
 
 #ifdef WIN32
+#ifdef _MSC_VER
 #pragma warning(disable:4505) // unreferenced local function has been removed
+#endif
 
 #ifdef HAVE_WINRT
     // using C++11 thread attribute for local thread data
