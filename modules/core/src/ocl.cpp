@@ -615,7 +615,7 @@ static void* initOpenCLAndLoad(const char* funcname)
             initialized = true;
             g_haveOpenCL = handle != 0 && dlsym(handle, oclFuncToCheck) != 0;
             if( g_haveOpenCL )
-                fprintf(stderr, "Succesffuly loaded OpenCL v1.1+ runtime from %s\n", oclpath);
+                fprintf(stderr, "Successfully loaded OpenCL v1.1+ runtime from %s\n", oclpath);
             else
                 fprintf(stderr, "Failed to load OpenCL runtime\n");
         }
@@ -1335,11 +1335,13 @@ inline bool operator < (const HashKey& h1, const HashKey& h2)
     return h1.a < h2.a || (h1.a == h2.a && h1.b < h2.b);
 }
 
-static bool g_isOpenCLInitialized = false;
-static bool g_isOpenCLAvailable = false;
 
 bool haveOpenCL()
 {
+#ifdef HAVE_OPENCL
+    static bool g_isOpenCLInitialized = false;
+    static bool g_isOpenCLAvailable = false;
+
     if (!g_isOpenCLInitialized)
     {
         try
@@ -1354,6 +1356,9 @@ bool haveOpenCL()
         g_isOpenCLInitialized = true;
     }
     return g_isOpenCLAvailable;
+#else
+    return false;
+#endif
 }
 
 bool useOpenCL()
@@ -2724,10 +2729,12 @@ bool Kernel::empty() const
 
 int Kernel::set(int i, const void* value, size_t sz)
 {
+    if (!p || !p->handle)
+        return -1;
     CV_Assert(i >= 0);
     if( i == 0 )
         p->cleanupUMats();
-    if( !p || !p->handle || clSetKernelArg(p->handle, (cl_uint)i, sz, value) < 0 )
+    if( clSetKernelArg(p->handle, (cl_uint)i, sz, value) < 0 )
         return -1;
     return i+1;
 }
@@ -2745,9 +2752,9 @@ int Kernel::set(int i, const UMat& m)
 
 int Kernel::set(int i, const KernelArg& arg)
 {
-    CV_Assert( i >= 0 );
     if( !p || !p->handle )
         return -1;
+    CV_Assert( i >= 0 );
     if( i == 0 )
         p->cleanupUMats();
     if( arg.m )
@@ -2756,6 +2763,13 @@ int Kernel::set(int i, const KernelArg& arg)
                           ((arg.flags & KernelArg::WRITE_ONLY) ? ACCESS_WRITE : 0);
         bool ptronly = (arg.flags & KernelArg::PTR_ONLY) != 0;
         cl_mem h = (cl_mem)arg.m->handle(accessFlags);
+
+        if (!h)
+        {
+            p->release();
+            p = 0;
+            return -1;
+        }
 
         if (ptronly)
             clSetKernelArg(p->handle, (cl_uint)i++, sizeof(h), &h);
