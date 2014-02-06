@@ -273,11 +273,6 @@ extern TLSData<CoreTLSData> coreTlsData;
 #define CL_RUNTIME_EXPORT
 #endif
 
-namespace ocl
-{
-    MatAllocator* getOpenCLAllocator();
-}
-
 extern bool __termination; // skip some cleanups, because process is terminating
                            // (for example, if ExitProcess() was already called)
 
