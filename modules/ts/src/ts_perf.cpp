@@ -20,7 +20,7 @@ static std::vector<std::string> available_impls;
 static std::string  param_impl;
 
 static enum PERF_STRATEGY strategyForce = PERF_STRATEGY_DEFAULT;
-static enum PERF_STRATEGY strategyModule = PERF_STRATEGY_BASE;
+static enum PERF_STRATEGY strategyModule = PERF_STRATEGY_SIMPLE;
 
 static double       param_max_outliers;
 static double       param_max_deviation;
@@ -1618,7 +1618,7 @@ namespace cv {
 
 void PrintTo(const String& str, ::std::ostream* os)
 {
-    *os << str;
+    *os << "\"" << str << "\"";
 }
 
 void PrintTo(const Size& sz, ::std::ostream* os)

@@ -1416,6 +1416,16 @@ int _InputArray::kind() const
     return flags & KIND_MASK;
 }
 
+int _InputArray::rows(int i) const
+{
+    return size(i).height;
+}
+
+int _InputArray::cols(int i) const
+{
+    return size(i).width;
+}
+
 Size _InputArray::size(int i) const
 {
     int k = kind();
@@ -2078,45 +2088,45 @@ void _OutputArray::create(Size _sz, int mtype, int i, bool allowTransposed, int 
     create(2, sizes, mtype, i, allowTransposed, fixedDepthMask);
 }
 
-void _OutputArray::create(int rows, int cols, int mtype, int i, bool allowTransposed, int fixedDepthMask) const
+void _OutputArray::create(int _rows, int _cols, int mtype, int i, bool allowTransposed, int fixedDepthMask) const
 {
     int k = kind();
     if( k == MAT && i < 0 && !allowTransposed && fixedDepthMask == 0 )
     {
-        CV_Assert(!fixedSize() || ((Mat*)obj)->size.operator()() == Size(cols, rows));
+        CV_Assert(!fixedSize() || ((Mat*)obj)->size.operator()() == Size(_cols, _rows));
         CV_Assert(!fixedType() || ((Mat*)obj)->type() == mtype);
-        ((Mat*)obj)->create(rows, cols, mtype);
+        ((Mat*)obj)->create(_rows, _cols, mtype);
         return;
     }
     if( k == UMAT && i < 0 && !allowTransposed && fixedDepthMask == 0 )
     {
-        CV_Assert(!fixedSize() || ((UMat*)obj)->size.operator()() == Size(cols, rows));
+        CV_Assert(!fixedSize() || ((UMat*)obj)->size.operator()() == Size(_cols, _rows));
         CV_Assert(!fixedType() || ((UMat*)obj)->type() == mtype);
-        ((UMat*)obj)->create(rows, cols, mtype);
+        ((UMat*)obj)->create(_rows, _cols, mtype);
         return;
     }
     if( k == GPU_MAT && i < 0 && !allowTransposed && fixedDepthMask == 0 )
     {
-        CV_Assert(!fixedSize() || ((cuda::GpuMat*)obj)->size() == Size(cols, rows));
+        CV_Assert(!fixedSize() || ((cuda::GpuMat*)obj)->size() == Size(_cols, _rows));
         CV_Assert(!fixedType() || ((cuda::GpuMat*)obj)->type() == mtype);
-        ((cuda::GpuMat*)obj)->create(rows, cols, mtype);
+        ((cuda::GpuMat*)obj)->create(_rows, _cols, mtype);
         return;
     }
     if( k == OPENGL_BUFFER && i < 0 && !allowTransposed && fixedDepthMask == 0 )
     {
-        CV_Assert(!fixedSize() || ((ogl::Buffer*)obj)->size() == Size(cols, rows));
+        CV_Assert(!fixedSize() || ((ogl::Buffer*)obj)->size() == Size(_cols, _rows));
         CV_Assert(!fixedType() || ((ogl::Buffer*)obj)->type() == mtype);
-        ((ogl::Buffer*)obj)->create(rows, cols, mtype);
+        ((ogl::Buffer*)obj)->create(_rows, _cols, mtype);
         return;
     }
     if( k == CUDA_MEM && i < 0 && !allowTransposed && fixedDepthMask == 0 )
     {
-        CV_Assert(!fixedSize() || ((cuda::CudaMem*)obj)->size() == Size(cols, rows));
+        CV_Assert(!fixedSize() || ((cuda::CudaMem*)obj)->size() == Size(_cols, _rows));
         CV_Assert(!fixedType() || ((cuda::CudaMem*)obj)->type() == mtype);
-        ((cuda::CudaMem*)obj)->create(rows, cols, mtype);
+        ((cuda::CudaMem*)obj)->create(_rows, _cols, mtype);
         return;
     }
-    int sizes[] = {rows, cols};
+    int sizes[] = {_rows, _cols};
     create(2, sizes, mtype, i, allowTransposed, fixedDepthMask);
 }
 
@@ -2679,17 +2689,17 @@ namespace cv {
 
 static bool ocl_setIdentity( InputOutputArray _m, const Scalar& s )
 {
-    int type = _m.type(), cn = CV_MAT_CN(type);
-    if (cn == 3)
-        return false;
+    int type = _m.type(), depth = CV_MAT_DEPTH(type), cn = CV_MAT_CN(type),
+            sctype = CV_MAKE_TYPE(depth, cn == 3 ? 4 : cn);
 
     ocl::Kernel k("setIdentity", ocl::core::set_identity_oclsrc,
-                  format("-D T=%s", ocl::memopTypeToStr(type)));
+                  format("-D T=%s -D T1=%s -D cn=%d -D ST=%s", ocl::memopTypeToStr(type),
+                         ocl::memopTypeToStr(depth), cn, ocl::memopTypeToStr(sctype)));
     if (k.empty())
         return false;
 
     UMat m = _m.getUMat();
-    k.args(ocl::KernelArg::WriteOnly(m), ocl::KernelArg::Constant(Mat(1, 1, type, s)));
+    k.args(ocl::KernelArg::WriteOnly(m), ocl::KernelArg::Constant(Mat(1, 1, sctype, s)));
 
     size_t globalsize[2] = { m.cols, m.rows };
     return k.run(2, globalsize, NULL, false);
@@ -2893,10 +2903,7 @@ static inline int divUp(int a, int b)
 static bool ocl_transpose( InputArray _src, OutputArray _dst )
 {
     const int TILE_DIM = 32, BLOCK_ROWS = 8;
-    int type = _src.type(), cn = CV_MAT_CN(type);
-
-    if (cn == 3)
-        return false;
+    int type = _src.type(), cn = CV_MAT_CN(type), depth = CV_MAT_DEPTH(type);
 
     UMat src = _src.getUMat();
     _dst.create(src.cols, src.rows, type);
@@ -2912,8 +2919,9 @@ static bool ocl_transpose( InputArray _src, OutputArray _dst )
     }
 
     ocl::Kernel k(kernelName.c_str(), ocl::core::transpose_oclsrc,
-                  format("-D T=%s -D TILE_DIM=%d -D BLOCK_ROWS=%d",
-                         ocl::memopTypeToStr(type), TILE_DIM, BLOCK_ROWS));
+                  format("-D T=%s -D T1=%s -D cn=%d -D TILE_DIM=%d -D BLOCK_ROWS=%d",
+                         ocl::memopTypeToStr(type), ocl::memopTypeToStr(depth),
+                         cn, TILE_DIM, BLOCK_ROWS));
     if (k.empty())
         return false;
 
@@ -2958,6 +2966,30 @@ void cv::transpose( InputArray _src, OutputArray _dst )
         src.copyTo(dst);
         return;
     }
+
+#if defined(HAVE_IPP) && !defined(HAVE_IPP_ICV_ONLY)
+    typedef IppStatus (CV_STDCALL * ippiTranspose)(const void * pSrc, int srcStep, void * pDst, int dstStep, IppiSize roiSize);
+    ippiTranspose ippFunc =
+    type == CV_8UC1 ? (ippiTranspose)ippiTranspose_8u_C1R :
+    type == CV_8UC3 ? (ippiTranspose)ippiTranspose_8u_C3R :
+    type == CV_8UC4 ? (ippiTranspose)ippiTranspose_8u_C4R :
+    type == CV_16UC1 ? (ippiTranspose)ippiTranspose_16u_C1R :
+    type == CV_16UC3 ? (ippiTranspose)ippiTranspose_16u_C3R :
+    type == CV_16UC4 ? (ippiTranspose)ippiTranspose_16u_C4R :
+    type == CV_16SC1 ? (ippiTranspose)ippiTranspose_16s_C1R :
+    type == CV_16SC3 ? (ippiTranspose)ippiTranspose_16s_C3R :
+    type == CV_16SC4 ? (ippiTranspose)ippiTranspose_16s_C4R :
+    type == CV_32SC1 ? (ippiTranspose)ippiTranspose_32s_C1R :
+    type == CV_32SC3 ? (ippiTranspose)ippiTranspose_32s_C3R :
+    type == CV_32SC4 ? (ippiTranspose)ippiTranspose_32s_C4R :
+    type == CV_32FC1 ? (ippiTranspose)ippiTranspose_32f_C1R :
+    type == CV_32FC3 ? (ippiTranspose)ippiTranspose_32f_C3R :
+    type == CV_32FC4 ? (ippiTranspose)ippiTranspose_32f_C4R : 0;
+
+    IppiSize roiSize = { src.cols, src.rows };
+    if (ippFunc != 0 && ippFunc(src.data, (int)src.step, dst.data, (int)dst.step, roiSize) >= 0)
+        return;
+#endif
 
     if( dst.data == src.data )
     {

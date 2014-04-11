@@ -1410,7 +1410,7 @@ bool useOpenCL()
 {
     CoreTLSData* data = coreTlsData.get();
     if( data->useOpenCL < 0 )
-        data->useOpenCL = (int)haveOpenCL();
+        data->useOpenCL = (int)haveOpenCL() && Device::getDefault().ptr() != NULL;
     return data->useOpenCL > 0;
 }
 
@@ -1419,7 +1419,7 @@ void setUseOpenCL(bool flag)
     if( haveOpenCL() )
     {
         CoreTLSData* data = coreTlsData.get();
-        data->useOpenCL = flag ? 1 : 0;
+        data->useOpenCL = (flag && Device::getDefault().ptr() != NULL) ? 1 : 0;
     }
 }
 
@@ -1581,7 +1581,7 @@ void finish()
 
 #define IMPLEMENT_REFCOUNTABLE() \
     void addref() { CV_XADD(&refcount, 1); } \
-    void release() { if( CV_XADD(&refcount, -1) == 1 ) delete this; } \
+    void release() { if( CV_XADD(&refcount, -1) == 1 && !cv::__termination) delete this; } \
     int refcount
 
 /////////////////////////////////////////// Platform /////////////////////////////////////////////
@@ -1712,6 +1712,17 @@ struct Device::Impl
 
         String deviceVersion_ = getStrProp(CL_DEVICE_VERSION);
         parseDeviceVersion(deviceVersion_, deviceVersionMajor_, deviceVersionMinor_);
+
+        vendorName_ = getStrProp(CL_DEVICE_VENDOR);
+        if (vendorName_ == "Advanced Micro Devices, Inc." ||
+            vendorName_ == "AMD")
+            vendorID_ = VENDOR_AMD;
+        else if (vendorName_ == "Intel(R) Corporation")
+            vendorID_ = VENDOR_INTEL;
+        else if (vendorName_ == "NVIDIA Corporation")
+            vendorID_ = VENDOR_NVIDIA;
+        else
+            vendorID_ = UNKNOWN_VENDOR;
     }
 
     template<typename _TpCL, typename _TpOut>
@@ -1754,6 +1765,8 @@ struct Device::Impl
     int deviceVersionMajor_;
     int deviceVersionMinor_;
     String driverVersion_;
+    String vendorName_;
+    int vendorID_;
 };
 
 
@@ -1813,8 +1826,11 @@ String Device::extensions() const
 String Device::version() const
 { return p ? p->version_ : String(); }
 
-String Device::vendor() const
-{ return p ? p->getStrProp(CL_DEVICE_VENDOR) : String(); }
+String Device::vendorName() const
+{ return p ? p->vendorName_ : String(); }
+
+int Device::vendorID() const
+{ return p ? p->vendorID_ : 0; }
 
 String Device::OpenCL_C_Version() const
 { return p ? p->getStrProp(CL_DEVICE_OPENCL_C_VERSION) : String(); }
@@ -2163,7 +2179,6 @@ static cl_device_id selectOpenCLDevice()
             goto not_found;
         }
     }
-
     if (deviceTypes.size() == 0)
     {
         if (!isID)
@@ -2177,13 +2192,16 @@ static cl_device_id selectOpenCLDevice()
     for (size_t t = 0; t < deviceTypes.size(); t++)
     {
         int deviceType = 0;
-        if (deviceTypes[t] == "GPU")
+        std::string tempStrDeviceType = deviceTypes[t];
+        std::transform( tempStrDeviceType.begin(), tempStrDeviceType.end(), tempStrDeviceType.begin(), tolower );
+
+        if (tempStrDeviceType == "gpu" || tempStrDeviceType == "dgpu" || tempStrDeviceType == "igpu")
             deviceType = Device::TYPE_GPU;
-        else if (deviceTypes[t] == "CPU")
+        else if (tempStrDeviceType == "cpu")
             deviceType = Device::TYPE_CPU;
-        else if (deviceTypes[t] == "ACCELERATOR")
+        else if (tempStrDeviceType == "accelerator")
             deviceType = Device::TYPE_ACCELERATOR;
-        else if (deviceTypes[t] == "ALL")
+        else if (tempStrDeviceType == "all")
             deviceType = Device::TYPE_ALL;
         else
         {
@@ -2213,7 +2231,14 @@ static cl_device_id selectOpenCLDevice()
         {
             std::string name;
             CV_OclDbgAssert(getStringInfo(clGetDeviceInfo, devices[i], CL_DEVICE_NAME, name) == CL_SUCCESS);
-            if (isID || name.find(deviceName) != std::string::npos)
+            cl_bool useGPU = true;
+            if(tempStrDeviceType == "dgpu" || tempStrDeviceType == "igpu")
+            {
+                cl_bool isIGPU = CL_FALSE;
+                clGetDeviceInfo(devices[i], CL_DEVICE_HOST_UNIFIED_MEMORY, sizeof(isIGPU), &isIGPU, NULL);
+                useGPU = tempStrDeviceType == "dgpu" ? !isIGPU : isIGPU;
+            }
+            if ( (isID || name.find(deviceName) != std::string::npos) && useGPU)
             {
                 // TODO check for OpenCL 1.1
                 return devices[i];
@@ -2229,6 +2254,7 @@ not_found:
         std::cerr << deviceTypes[t] << " ";
 
     std::cerr << std::endl << "    Device name: " << (deviceName.length() == 0 ? "any" : deviceName) << std::endl;
+    CV_Error(CL_INVALID_DEVICE, "Requested OpenCL device is not found");
     return NULL;
 }
 
@@ -2460,23 +2486,23 @@ const Device& Context::device(size_t idx) const
 
 Context& Context::getDefault(bool initialize)
 {
-    static Context ctx;
-    if(!ctx.p && haveOpenCL())
+    static Context* ctx = new Context();
+    if(!ctx->p && haveOpenCL())
     {
-        if (!ctx.p)
-            ctx.p = new Impl();
+        if (!ctx->p)
+            ctx->p = new Impl();
         if (initialize)
         {
             // do not create new Context right away.
             // First, try to retrieve existing context of the same type.
             // In its turn, Platform::getContext() may call Context::create()
             // if there is no such context.
-            if (ctx.p->handle == NULL)
-                ctx.p->setDefault();
+            if (ctx->p->handle == NULL)
+                ctx->p->setDefault();
         }
     }
 
-    return ctx;
+    return *ctx;
 }
 
 Program Context::getProg(const ProgramSource& prog,
@@ -2624,19 +2650,19 @@ static cl_command_queue getQueue(const Queue& q)
 /////////////////////////////////////////// KernelArg /////////////////////////////////////////////
 
 KernelArg::KernelArg()
-    : flags(0), m(0), obj(0), sz(0), wscale(1)
+    : flags(0), m(0), obj(0), sz(0), wscale(1), iwscale(1)
 {
 }
 
-KernelArg::KernelArg(int _flags, UMat* _m, int _wscale, const void* _obj, size_t _sz)
-    : flags(_flags), m(_m), obj(_obj), sz(_sz), wscale(_wscale)
+KernelArg::KernelArg(int _flags, UMat* _m, int _wscale, int _iwscale, const void* _obj, size_t _sz)
+    : flags(_flags), m(_m), obj(_obj), sz(_sz), wscale(_wscale), iwscale(_iwscale)
 {
 }
 
 KernelArg KernelArg::Constant(const Mat& m)
 {
     CV_Assert(m.isContinuous());
-    return KernelArg(CONSTANT, 0, 1, m.data, m.total()*m.elemSize());
+    return KernelArg(CONSTANT, 0, 0, 0, m.data, m.total()*m.elemSize());
 }
 
 /////////////////////////////////////////// Kernel /////////////////////////////////////////////
@@ -2798,7 +2824,8 @@ int Kernel::set(int i, const void* value, size_t sz)
 {
     if (!p || !p->handle)
         return -1;
-    CV_Assert(i >= 0);
+    if (i < 0)
+        return i;
     if( i == 0 )
         p->cleanupUMats();
 
@@ -2824,7 +2851,8 @@ int Kernel::set(int i, const KernelArg& arg)
 {
     if( !p || !p->handle )
         return -1;
-    CV_Assert( i >= 0 );
+    if (i < 0)
+        return i;
     if( i == 0 )
         p->cleanupUMats();
     if( arg.m )
@@ -2853,7 +2881,7 @@ int Kernel::set(int i, const KernelArg& arg)
 
             if( !(arg.flags & KernelArg::NO_SIZE) )
             {
-                int cols = u2d.cols*arg.wscale;
+                int cols = u2d.cols*arg.wscale/arg.iwscale;
                 CV_OclDbgAssert(clSetKernelArg(p->handle, (cl_uint)i, sizeof(u2d.rows), &u2d.rows) == CL_SUCCESS);
                 CV_OclDbgAssert(clSetKernelArg(p->handle, (cl_uint)(i+1), sizeof(cols), &cols) == CL_SUCCESS);
                 i += 2;
@@ -2869,7 +2897,7 @@ int Kernel::set(int i, const KernelArg& arg)
             i += 4;
             if( !(arg.flags & KernelArg::NO_SIZE) )
             {
-                int cols = u3d.cols*arg.wscale;
+                int cols = u3d.cols*arg.wscale/arg.iwscale;
                 CV_OclDbgAssert(clSetKernelArg(p->handle, (cl_uint)i, sizeof(u3d.slices), &u3d.rows) == CL_SUCCESS);
                 CV_OclDbgAssert(clSetKernelArg(p->handle, (cl_uint)(i+1), sizeof(u3d.rows), &u3d.rows) == CL_SUCCESS);
                 CV_OclDbgAssert(clSetKernelArg(p->handle, (cl_uint)(i+2), sizeof(u3d.cols), &cols) == CL_SUCCESS);
@@ -2897,7 +2925,7 @@ bool Kernel::run(int dims, size_t _globalsize[], size_t _localsize[],
     for (int i = 0; i < dims; i++)
     {
         size_t val = _localsize ? _localsize[i] :
-            dims == 1 ? 64 : dims == 2 ? (16>>i) : dims == 3 ? (8>>(int)(i>0)) : 1;
+            dims == 1 ? 64 : dims == 2 ? (i == 0 ? 256 : 8) : dims == 3 ? (8>>(int)(i>0)) : 1;
         CV_Assert( val > 0 );
         total *= _globalsize[i];
         globalsize[i] = ((_globalsize[i] + val - 1)/val)*val;
@@ -3009,6 +3037,12 @@ struct Program::Impl
             for( i = 0; i < n; i++ )
                 deviceList[i] = ctx.device(i).ptr();
 
+            Device device = Device::getDefault();
+            if (device.isAMD())
+                buildflags += " -D AMD_DEVICE";
+            else if (device.isIntel())
+                buildflags += " -D INTEL_DEVICE";
+
             retval = clBuildProgram(handle, n,
                                     (const cl_device_id*)deviceList,
                                     buildflags.c_str(), 0, 0);
@@ -3098,7 +3132,12 @@ struct Program::Impl
     {
         if( handle )
         {
-            clReleaseProgram(handle);
+#ifdef _WIN32
+            if (!cv::__termination)
+#endif
+            {
+                clReleaseProgram(handle);
+            }
             handle = NULL;
         }
     }
@@ -4195,34 +4234,34 @@ const char* typeToStr(int type)
 {
     static const char* tab[]=
     {
-        "uchar", "uchar2", "uchar3", "uchar4",
-        "char", "char2", "char3", "char4",
-        "ushort", "ushort2", "ushort3", "ushort4",
-        "short", "short2", "short3", "short4",
-        "int", "int2", "int3", "int4",
-        "float", "float2", "float3", "float4",
-        "double", "double2", "double3", "double4",
-        "?", "?", "?", "?"
+        "uchar", "uchar2", "uchar3", "uchar4", 0, 0, 0, "uchar8", 0, 0, 0, 0, 0, 0, 0, "uchar16",
+        "char", "char2", "char3", "char4", 0, 0, 0, "char8", 0, 0, 0, 0, 0, 0, 0, "char16",
+        "ushort", "ushort2", "ushort3", "ushort4",0, 0, 0, "ushort8", 0, 0, 0, 0, 0, 0, 0, "ushort16",
+        "short", "short2", "short3", "short4", 0, 0, 0, "short8", 0, 0, 0, 0, 0, 0, 0, "short16",
+        "int", "int2", "int3", "int4", 0, 0, 0, "int8", 0, 0, 0, 0, 0, 0, 0, "int16",
+        "float", "float2", "float3", "float4", 0, 0, 0, "float8", 0, 0, 0, 0, 0, 0, 0, "float16",
+        "double", "double2", "double3", "double4", 0, 0, 0, "double8", 0, 0, 0, 0, 0, 0, 0, "double16",
+        "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?"
     };
     int cn = CV_MAT_CN(type), depth = CV_MAT_DEPTH(type);
-    return cn > 4 ? "?" : tab[depth*4 + cn-1];
+    return cn > 16 ? "?" : tab[depth*16 + cn-1];
 }
 
 const char* memopTypeToStr(int type)
 {
     static const char* tab[] =
     {
-        "uchar", "uchar2", "uchar3", "uchar4",
-        "uchar", "uchar2", "uchar3", "uchar4",
-        "ushort", "ushort2", "ushort3", "ushort4",
-        "ushort", "ushort2", "ushort3", "ushort4",
-        "int", "int2", "int3", "int4",
-        "int", "int2", "int3", "int4",
-        "ulong", "ulong2", "ulong3", "ulong4",
-        "?", "?", "?", "?"
+        "uchar", "uchar2", "uchar3", "uchar4", 0, 0, 0, "uchar8", 0, 0, 0, 0, 0, 0, 0, "uchar16",
+        "char", "char2", "char3", "char4", 0, 0, 0, "char8", 0, 0, 0, 0, 0, 0, 0, "char16",
+        "ushort", "ushort2", "ushort3", "ushort4",0, 0, 0, "ushort8", 0, 0, 0, 0, 0, 0, 0, "ushort16",
+        "short", "short2", "short3", "short4", 0, 0, 0, "short8", 0, 0, 0, 0, 0, 0, 0, "short16",
+        "int", "int2", "int3", "int4", 0, 0, 0, "int8", 0, 0, 0, 0, 0, 0, 0, "int16",
+        "int", "int2", "int3", "int4", 0, 0, 0, "int8", 0, 0, 0, 0, 0, 0, 0, "int16",
+        "ulong", "ulong2", "ulong3", "ulong4", 0, 0, 0, "ulong8", 0, 0, 0, 0, 0, 0, 0, "ulong16",
+        "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?"
     };
     int cn = CV_MAT_CN(type), depth = CV_MAT_DEPTH(type);
-    return cn > 4 ? "?" : tab[depth*4 + cn-1];
+    return cn > 16 ? "?" : tab[depth*16 + cn-1];
 }
 
 const char* convertTypeStr(int sdepth, int ddepth, int cn, char* buf)
@@ -4277,7 +4316,7 @@ static std::string kerToStr(const Mat & k)
     return stream.str();
 }
 
-String kernelToStr(InputArray _kernel, int ddepth)
+String kernelToStr(InputArray _kernel, int ddepth, const char * name)
 {
     Mat kernel = _kernel.getMat().reshape(1, 1);
 
@@ -4288,14 +4327,82 @@ String kernelToStr(InputArray _kernel, int ddepth)
     if (ddepth != depth)
         kernel.convertTo(kernel, ddepth);
 
-    typedef std::string (*func_t)(const Mat &);
-    static const func_t funcs[] = { kerToStr<uchar>, kerToStr<char>, kerToStr<ushort>,kerToStr<short>,
+    typedef std::string (* func_t)(const Mat &);
+    static const func_t funcs[] = { kerToStr<uchar>, kerToStr<char>, kerToStr<ushort>, kerToStr<short>,
                                     kerToStr<int>, kerToStr<float>, kerToStr<double>, 0 };
     const func_t func = funcs[depth];
     CV_Assert(func != 0);
 
-    return cv::format(" -D COEFF=%s", func(kernel).c_str());
+    return cv::format(" -D %s=%s", name ? name : "COEFF", func(kernel).c_str());
 }
+
+#define PROCESS_SRC(src) \
+    do \
+    { \
+        if (!src.empty()) \
+        { \
+            CV_Assert(src.isMat() || src.isUMat()); \
+            int ctype = src.type(), ccn = CV_MAT_CN(ctype); \
+            Size csize = src.size(); \
+            cols.push_back(ccn * src.size().width); \
+            if (ctype != type || csize != ssize) \
+                return 1; \
+            offsets.push_back(src.offset()); \
+            steps.push_back(src.step()); \
+        } \
+    } \
+    while ((void)0, 0)
+
+int predictOptimalVectorWidth(InputArray src1, InputArray src2, InputArray src3,
+                              InputArray src4, InputArray src5, InputArray src6,
+                              InputArray src7, InputArray src8, InputArray src9)
+{
+    int type = src1.type(), depth = CV_MAT_DEPTH(type), cn = CV_MAT_CN(type), esz = CV_ELEM_SIZE(depth);
+    Size ssize = src1.size();
+    const ocl::Device & d = ocl::Device::getDefault();
+
+    int vectorWidths[] = { d.preferredVectorWidthChar(), d.preferredVectorWidthChar(),
+        d.preferredVectorWidthShort(), d.preferredVectorWidthShort(),
+        d.preferredVectorWidthInt(), d.preferredVectorWidthFloat(),
+        d.preferredVectorWidthDouble(), -1 }, width = vectorWidths[depth];
+
+    if (ssize.width * cn < width || width <= 0)
+        return 1;
+
+    std::vector<size_t> offsets, steps, cols;
+    PROCESS_SRC(src1);
+    PROCESS_SRC(src2);
+    PROCESS_SRC(src3);
+    PROCESS_SRC(src4);
+    PROCESS_SRC(src5);
+    PROCESS_SRC(src6);
+    PROCESS_SRC(src7);
+    PROCESS_SRC(src8);
+    PROCESS_SRC(src9);
+
+    size_t size = offsets.size();
+    int wsz = width * esz;
+    std::vector<int> dividers(size, wsz);
+
+    for (size_t i = 0; i < size; ++i)
+        while (offsets[i] % dividers[i] != 0 || steps[i] % dividers[i] != 0 || cols[i] % dividers[i] != 0)
+            dividers[i] >>= 1;
+
+    // default strategy
+    for (size_t i = 0; i < size; ++i)
+        if (dividers[i] != wsz)
+        {
+            width = 1;
+            break;
+        }
+
+    // another strategy
+//    width = *std::min_element(dividers.begin(), dividers.end());
+
+    return width;
+}
+
+#undef PROCESS_SRC
 
 /////////////////////////////////////////// Image2D ////////////////////////////////////////////////////
 

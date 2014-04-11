@@ -118,6 +118,8 @@ public:
 
     virtual int kind() const;
     virtual int dims(int i=-1) const;
+    virtual int cols(int i=-1) const;
+    virtual int rows(int i=-1) const;
     virtual Size size(int i=-1) const;
     virtual int sizend(int* sz, int i=-1) const;
     virtual bool sameSize(const _InputArray& arr) const;
@@ -135,7 +137,7 @@ public:
     bool isUMat() const;
     bool isMatVector() const;
     bool isUMatVector() const;
-    bool isMatx();
+    bool isMatx() const;
 
     virtual ~_InputArray();
 
