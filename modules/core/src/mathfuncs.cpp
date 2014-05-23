@@ -237,10 +237,11 @@ float  cubeRoot( float value )
 
 static void Magnitude_32f(const float* x, const float* y, float* mag, int len)
 {
-#if defined(HAVE_IPP) && !defined(HAVE_IPP_ICV_ONLY)
+#if defined HAVE_IPP && 0
     IppStatus status = ippsMagnitude_32f(x, y, mag, len);
     if (status >= 0)
         return;
+    setIppErrorStatus();
 #endif
 
     int i = 0;
@@ -269,10 +270,11 @@ static void Magnitude_32f(const float* x, const float* y, float* mag, int len)
 
 static void Magnitude_64f(const double* x, const double* y, double* mag, int len)
 {
-#if defined(HAVE_IPP) && !defined(HAVE_IPP_ICV_ONLY)
+#if defined(HAVE_IPP)
     IppStatus status = ippsMagnitude_64f(x, y, mag, len);
     if (status >= 0)
         return;
+    setIppErrorStatus();
 #endif
 
     int i = 0;
@@ -302,9 +304,10 @@ static void Magnitude_64f(const double* x, const double* y, double* mag, int len
 
 static void InvSqrt_32f(const float* src, float* dst, int len)
 {
-#if defined(HAVE_IPP) && !defined(HAVE_IPP_ICV_ONLY)
+#if defined(HAVE_IPP)
     if (ippsInvSqrt_32f_A21(src, dst, len) >= 0)
         return;
+    setIppErrorStatus();
 #endif
 
     int i = 0;
@@ -350,9 +353,10 @@ static void InvSqrt_64f(const double* src, double* dst, int len)
 
 static void Sqrt_32f(const float* src, float* dst, int len)
 {
-#if defined(HAVE_IPP) && !defined(HAVE_IPP_ICV_ONLY)
+#if defined(HAVE_IPP)
     if (ippsSqrt_32f_A21(src, dst, len) >= 0)
         return;
+    setIppErrorStatus();
 #endif
     int i = 0;
 
@@ -383,9 +387,10 @@ static void Sqrt_32f(const float* src, float* dst, int len)
 
 static void Sqrt_64f(const double* src, double* dst, int len)
 {
-#if defined(HAVE_IPP) && !defined(HAVE_IPP_ICV_ONLY)
+#if defined(HAVE_IPP)
     if (ippsSqrt_64f_A50(src, dst, len) >= 0)
         return;
+    setIppErrorStatus();
 #endif
 
     int i = 0;
@@ -754,7 +759,7 @@ void polarToCart( InputArray src1, InputArray src2,
     dst2.create( Angle.dims, Angle.size, type );
     Mat X = dst1.getMat(), Y = dst2.getMat();
 
-#if defined(HAVE_IPP) && !defined(HAVE_IPP_ICV_ONLY)
+#if defined(HAVE_IPP)
     if (Mag.isContinuous() && Angle.isContinuous() && X.isContinuous() && Y.isContinuous() && !angleInDegrees)
     {
         typedef IppStatus (CV_STDCALL * ippsPolarToCart)(const void * pSrcMagn, const void * pSrcPhase,
@@ -767,6 +772,7 @@ void polarToCart( InputArray src1, InputArray src2,
         IppStatus status = ippFunc(Mag.data, Angle.data, X.data, Y.data, static_cast<int>(cn * X.total()));
         if (status >= 0)
             return;
+        setIppErrorStatus();
     }
 #endif
 
@@ -1319,6 +1325,7 @@ static void Exp_32f_ipp(const float *x, float *y, int n)
 {
     if (0 <= ippsExp_32f_A21(x, y, n))
         return;
+    setIppErrorStatus();
     Exp_32f(x, y, n);
 }
 
@@ -1326,6 +1333,7 @@ static void Exp_64f_ipp(const double *x, double *y, int n)
 {
     if (0 <= ippsExp_64f_A50(x, y, n))
         return;
+    setIppErrorStatus();
     Exp_64f(x, y, n);
 }
 
@@ -1977,6 +1985,7 @@ static void Log_32f_ipp(const float *x, float *y, int n)
 {
     if (0 <= ippsLn_32f_A21(x, y, n))
         return;
+    setIppErrorStatus();
     Log_32f(x, y, n);
 }
 
@@ -1984,6 +1993,7 @@ static void Log_64f_ipp(const double *x, double *y, int n)
 {
     if (0 <= ippsLn_64f_A50(x, y, n))
         return;
+    setIppErrorStatus();
     Log_64f(x, y, n);
 }
 
@@ -2160,7 +2170,7 @@ void pow( InputArray _src, double power, OutputArray _dst )
             _src.copyTo(_dst);
             return;
         case 2:
-#if defined(HAVE_IPP) && !defined(HAVE_IPP_ICV_ONLY)
+#if defined(HAVE_IPP)
             if (depth == CV_32F && !same && ( (_src.dims() <= 2 && !ocl::useOpenCL()) || (_src.dims() > 2 && _src.isContinuous() && _dst.isContinuous()) ))
             {
                 Mat src = _src.getMat();
@@ -2181,6 +2191,7 @@ void pow( InputArray _src, double power, OutputArray _dst )
 
                 if (status >= 0)
                     return;
+                setIppErrorStatus();
             }
 #endif
             if (same)
@@ -2232,7 +2243,7 @@ void pow( InputArray _src, double power, OutputArray _dst )
     }
     else
     {
-#if defined(HAVE_IPP) && !defined(HAVE_IPP_ICV_ONLY)
+#if defined(HAVE_IPP)
         if (src.isContinuous() && dst.isContinuous())
         {
             IppStatus status = depth == CV_32F ?
@@ -2241,6 +2252,7 @@ void pow( InputArray _src, double power, OutputArray _dst )
 
             if (status >= 0)
                 return;
+            setIppErrorStatus();
         }
 #endif
 

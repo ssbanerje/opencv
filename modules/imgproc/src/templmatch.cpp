@@ -341,15 +341,12 @@ static bool ocl_matchTemplate( InputArray _img, InputArray _templ, OutputArray _
 
 #endif
 
-#if defined HAVE_IPP && IPP_VERSION_MAJOR >= 7 && !defined HAVE_IPP_ICV_ONLY
+#if defined HAVE_IPP
 
 typedef IppStatus (CV_STDCALL * ippimatchTemplate)(const void*, int, IppiSize, const void*, int, IppiSize, Ipp32f* , int , IppEnum , Ipp8u*);
 
 static bool ipp_crossCorr(const Mat& src, const Mat& tpl, Mat& dst)
 {
-    if (src.channels()!= 1)
-        return false;
-
     IppStatus status;
 
     IppiSize srcRoiSize = {src.cols,src.rows};
@@ -383,9 +380,6 @@ static bool ipp_crossCorr(const Mat& src, const Mat& tpl, Mat& dst)
 
 static bool ipp_sqrDistance(const Mat& src, const Mat& tpl, Mat& dst)
 {
-    if (src.channels()!= 1)
-        return false;
-
     IppStatus status;
 
     IppiSize srcRoiSize = {src.cols,src.rows};
@@ -607,8 +601,9 @@ void crossCorr( const Mat& img, const Mat& _templ, Mat& corr,
 
 void cv::matchTemplate( InputArray _img, InputArray _templ, OutputArray _result, int method )
 {
+    int type = _img.type(), depth = CV_MAT_DEPTH(type), cn = CV_MAT_CN(type);
     CV_Assert( CV_TM_SQDIFF <= method && method <= CV_TM_CCOEFF_NORMED );
-    CV_Assert( (_img.depth() == CV_8U || _img.depth() == CV_32F) && _img.type() == _templ.type() && _img.dims() <= 2 );
+    CV_Assert( (depth == CV_8U || depth == CV_32F) && type == _templ.type() && _img.dims() <= 2 );
 
     bool needswap = _img.size().height < _templ.size().height || _img.size().width < _templ.size().width;
     if (needswap)
@@ -638,15 +633,27 @@ void cv::matchTemplate( InputArray _img, InputArray _templ, OutputArray _result,
         return;
 #endif
 
-#if defined HAVE_IPP && IPP_VERSION_MAJOR >= 7 && !defined HAVE_IPP_ICV_ONLY
-    if (method == CV_TM_SQDIFF && ipp_sqrDistance(img, templ, result))
-        return;
+#if defined HAVE_IPP
+    bool useIppMT = (templ.rows < img.rows/2 && templ.cols < img.cols/2);
+
+    if (method == CV_TM_SQDIFF && cn == 1 && useIppMT)
+    {
+        if (ipp_sqrDistance(img, templ, result))
+            return;
+        setIppErrorStatus();
+    }
 #endif
 
-    int cn = img.channels();
-
-#if defined HAVE_IPP && IPP_VERSION_MAJOR >= 7 && !defined HAVE_IPP_ICV_ONLY
-    if (!ipp_crossCorr(img, templ, result))
+#if defined HAVE_IPP
+    if (cn == 1 && useIppMT)
+    {
+        if (!ipp_crossCorr(img, templ, result))
+        {
+            setIppErrorStatus();
+            crossCorr( img, templ, result, result.size(), result.type(), Point(0,0), 0, 0);
+        }
+    }
+    else
 #endif
     crossCorr( img, templ, result, result.size(), result.type(), Point(0,0), 0, 0);
 
