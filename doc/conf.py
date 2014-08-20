@@ -303,7 +303,7 @@ extlinks = {
             'basicstructures' : ('http://docs.opencv.org/modules/core/doc/basic_structures.html#%s', None),
             'oldbasicstructures' : ('http://docs.opencv.org/modules/core/doc/old_basic_structures.html#%s', None),
             'readwriteimage' : ('http://docs.opencv.org/modules/imgcodecs/doc/reading_and_writing_images.html#%s', None),
-            'readwritevideo' : ('http://docs.opencv.org/modules/highgui/doc/reading_and_writing_video.html#%s', None),
+            'readwritevideo' : ('http://docs.opencv.org/modules/videoio/doc/reading_and_writing_video.html#%s', None),
             'operationsonarrays' : ('http://docs.opencv.org/modules/core/doc/operations_on_arrays.html#%s', None),
             'utilitysystemfunctions' : ('http://docs.opencv.org/modules/core/doc/utility_and_system_functions_and_macros.html#%s', None),
             'imgprocfilter' : ('http://docs.opencv.org/modules/imgproc/doc/filtering.html#%s', None),
@@ -311,7 +311,7 @@ extlinks = {
             'drawingfunc' : ('http://docs.opencv.org/modules/core/doc/drawing_functions.html#%s', None),
             'xmlymlpers' : ('http://docs.opencv.org/modules/core/doc/xml_yaml_persistence.html#%s', None),
             'rwimg' : ('http://docs.opencv.org/modules/imgcodecs/doc/reading_and_writing_images.html#%s', None),
-            'hgvideo' : ('http://docs.opencv.org/modules/highgui/doc/reading_and_writing_video.html#%s', None),
+            'hgvideo' : ('http://docs.opencv.org/modules/videoio/doc/reading_and_writing_video.html#%s', None),
             'gpuinit' : ('http://docs.opencv.org/modules/gpu/doc/initalization_and_information.html#%s', None),
             'gpudatastructure' : ('http://docs.opencv.org/modules/gpu/doc/data_structures.html#%s', None),
             'gpuopmatrices' : ('http://docs.opencv.org/modules/gpu/doc/operations_on_matrices.html#%s', None),
@@ -325,6 +325,7 @@ extlinks = {
             'imgproc_geometric' : ('http://docs.opencv.org/modules/imgproc/doc/geometric_transformations.html#%s', None ),
             'miscellaneous_transformations' : ('http://docs.opencv.org/modules/imgproc/doc/miscellaneous_transformations.html#%s', None),
             'user_interface' : ('http://docs.opencv.org/modules/highgui/doc/user_interface.html#%s', None),
+            'video' : ('http://docs.opencv.org/modules/video/doc/motion_analysis_and_object_tracking.html#%s', None),
 
             # 'opencv_group' : ('http://answers.opencv.org/%s', None),
             'opencv_qa' : ('http://answers.opencv.org/%s', None),
@@ -402,6 +403,7 @@ extlinks = {
             'contour_area' : ('http://docs.opencv.org/modules/imgproc/doc/structural_analysis_and_shape_descriptors.html?highlight=contourarea#contourarea%s', None),
             'arc_length' : ('http://docs.opencv.org/modules/imgproc/doc/structural_analysis_and_shape_descriptors.html?highlight=arclength#arclength%s', None),
             'point_polygon_test' : ('http://docs.opencv.org/modules/imgproc/doc/structural_analysis_and_shape_descriptors.html?highlight=pointpolygontest#pointpolygontest%s', None),
+            'feature_detection_and_description' : ('http://docs.opencv.org/modules/features2d/doc/feature_detection_and_description.html#%s', None),
             'feature_detector' : ( 'http://docs.opencv.org/modules/features2d/doc/common_interfaces_of_feature_detectors.html?highlight=featuredetector#FeatureDetector%s', None),
             'feature_detector_detect' : ('http://docs.opencv.org/modules/features2d/doc/common_interfaces_of_feature_detectors.html?highlight=detect#featuredetector-detect%s', None ),
             'surf_feature_detector' : ('http://docs.opencv.org/modules/features2d/doc/common_interfaces_of_feature_detectors.html?highlight=surffeaturedetector#surffeaturedetector%s', None ),
@@ -420,7 +422,7 @@ extlinks = {
             'background_subtractor' : ('http://docs.opencv.org/modules/video/doc/motion_analysis_and_object_tracking.html?highlight=backgroundsubtractor#backgroundsubtractor%s', None),
             'background_subtractor_mog' : ('http://docs.opencv.org/modules/video/doc/motion_analysis_and_object_tracking.html?highlight=backgroundsubtractorMOG#backgroundsubtractormog%s', None),
             'background_subtractor_mog_two' : ('http://docs.opencv.org/modules/video/doc/motion_analysis_and_object_tracking.html?highlight=backgroundsubtractorMOG2#backgroundsubtractormog2%s', None),
-            'video_capture' : ('http://docs.opencv.org/modules/highgui/doc/reading_and_writing_video.html?highlight=videocapture#videocapture%s', None),
+            'video_capture' : ('http://docs.opencv.org/modules/videoio/doc/reading_and_writing_video.html?highlight=videocapture#videocapture%s', None),
             'ippa_convert': ('http://docs.opencv.org/modules/core/doc/ipp_async_converters.html#%s', None),
             'ptr':('http://docs.opencv.org/modules/core/doc/basic_structures.html?highlight=Ptr#Ptr%s', None)
            }

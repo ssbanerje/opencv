@@ -139,9 +139,6 @@ public:
 
                     string filename = cv::tempfile(".jpg");
                     imwrite(filename, img);
-                    img = imread(filename, IMREAD_UNCHANGED);
-
-                    filename = string(ts->get_data_path() + "readwrite/test_" + char(k + 48) + "_c" + char(num_channels + 48) + ".jpg");
                     ts->printf(ts->LOG, "reading test image : %s\n", filename.c_str());
                     Mat img_test = imread(filename, IMREAD_UNCHANGED);
 
@@ -160,8 +157,9 @@ public:
 #endif
 
 #ifdef HAVE_TIFF
-                for (int num_channels = 1; num_channels <= 3; num_channels+=2)
+                for (int num_channels = 1; num_channels <= 4; num_channels++)
                 {
+                    if (num_channels == 2) continue;
                     // tiff
                     ts->printf(ts->LOG, "image type depth:%d   channels:%d   ext: %s\n", CV_16U, num_channels, ".tiff");
                     Mat img(img_r * k, img_c * k, CV_MAKETYPE(CV_16U, num_channels), Scalar::all(0));
@@ -222,12 +220,12 @@ public:
 
 
 #ifdef HAVE_PNG
-TEST(Highgui_Image, write_big) { CV_GrfmtWriteBigImageTest test; test.safe_run(); }
+TEST(Imgcodecs_Image, write_big) { CV_GrfmtWriteBigImageTest test; test.safe_run(); }
 #endif
 
-TEST(Highgui_Image, write_imageseq) { CV_GrfmtWriteSequenceImageTest test; test.safe_run(); }
+TEST(Imgcodecs_Image, write_imageseq) { CV_GrfmtWriteSequenceImageTest test; test.safe_run(); }
 
-TEST(Highgui_Image, read_bmp_rle8) { CV_GrfmtReadBMPRLE8Test test; test.safe_run(); }
+TEST(Imgcodecs_Image, read_bmp_rle8) { CV_GrfmtReadBMPRLE8Test test; test.safe_run(); }
 
 #ifdef HAVE_PNG
 class CV_GrfmtPNGEncodeTest : public cvtest::BaseTest
@@ -256,9 +254,9 @@ public:
     }
 };
 
-TEST(Highgui_Image, encode_png) { CV_GrfmtPNGEncodeTest test; test.safe_run(); }
+TEST(Imgcodecs_Image, encode_png) { CV_GrfmtPNGEncodeTest test; test.safe_run(); }
 
-TEST(Highgui_ImreadVSCvtColor, regression)
+TEST(Imgcodecs_ImreadVSCvtColor, regression)
 {
     cvtest::TS& ts = *cvtest::TS::ptr();
 
@@ -298,7 +296,7 @@ public:
 
             ASSERT_TRUE(img.channels() == 4);
 
-            unsigned char* img_data = (unsigned char*)img.data;
+            unsigned char* img_data = img.ptr();
 
             // Verification first pixel is red in BGRA
             ASSERT_TRUE(img_data[0] == 0x00);
@@ -318,7 +316,7 @@ public:
 
             ASSERT_TRUE(img.channels() == 3);
 
-            img_data = (unsigned char*)img.data;
+            img_data = img.ptr();
 
             // Verification first pixel is red in BGR
             ASSERT_TRUE(img_data[0] == 0x00);
@@ -336,7 +334,7 @@ public:
 
             ASSERT_TRUE(img.channels() == 3);
 
-            img_data = (unsigned char*)img.data;
+            img_data = img.ptr();
 
             // Verification first pixel is red in BGR
             ASSERT_TRUE(img_data[0] == 0x00);
@@ -354,7 +352,7 @@ public:
 
             ASSERT_TRUE(img.channels() == 3);
 
-            img_data = (unsigned char*)img.data;
+            img_data = img.ptr();
 
             // Verification first pixel is red in BGR
             ASSERT_TRUE(img_data[0] == 0x00);
@@ -374,11 +372,11 @@ public:
     }
 };
 
-TEST(Highgui_Image, read_png_color_palette_with_alpha) { CV_GrfmtReadPNGColorPaletteWithAlphaTest test; test.safe_run(); }
+TEST(Imgcodecs_Image, read_png_color_palette_with_alpha) { CV_GrfmtReadPNGColorPaletteWithAlphaTest test; test.safe_run(); }
 #endif
 
 #ifdef HAVE_JPEG
-TEST(Highgui_Jpeg, encode_empty)
+TEST(Imgcodecs_Jpeg, encode_empty)
 {
     cv::Mat img;
     std::vector<uchar> jpegImg;
@@ -386,7 +384,7 @@ TEST(Highgui_Jpeg, encode_empty)
     ASSERT_THROW(cv::imencode(".jpg", img, jpegImg), cv::Exception);
 }
 
-TEST(Highgui_Jpeg, encode_decode_progressive_jpeg)
+TEST(Imgcodecs_Jpeg, encode_decode_progressive_jpeg)
 {
     cvtest::TS& ts = *cvtest::TS::ptr();
     string input = string(ts.get_data_path()) + "../cv/shared/lena.png";
@@ -410,7 +408,7 @@ TEST(Highgui_Jpeg, encode_decode_progressive_jpeg)
     remove(output_progressive.c_str());
 }
 
-TEST(Highgui_Jpeg, encode_decode_optimize_jpeg)
+TEST(Imgcodecs_Jpeg, encode_decode_optimize_jpeg)
 {
     cvtest::TS& ts = *cvtest::TS::ptr();
     string input = string(ts.get_data_path()) + "../cv/shared/lena.png";
@@ -433,6 +431,31 @@ TEST(Highgui_Jpeg, encode_decode_optimize_jpeg)
 
     remove(output_optimized.c_str());
 }
+
+TEST(Imgcodecs_Jpeg, encode_decode_rst_jpeg)
+{
+    cvtest::TS& ts = *cvtest::TS::ptr();
+    string input = string(ts.get_data_path()) + "../cv/shared/lena.png";
+    cv::Mat img = cv::imread(input);
+    ASSERT_FALSE(img.empty());
+
+    std::vector<int> params;
+    params.push_back(IMWRITE_JPEG_RST_INTERVAL);
+    params.push_back(1);
+
+    string output_rst = cv::tempfile(".jpg");
+    EXPECT_NO_THROW(cv::imwrite(output_rst, img, params));
+    cv::Mat img_jpg_rst = cv::imread(output_rst);
+
+    string output_normal = cv::tempfile(".jpg");
+    EXPECT_NO_THROW(cv::imwrite(output_normal, img));
+    cv::Mat img_jpg_normal = cv::imread(output_normal);
+
+    EXPECT_EQ(0, cvtest::norm(img_jpg_rst, img_jpg_normal, NORM_INF));
+
+    remove(output_rst.c_str());
+}
+
 #endif
 
 
@@ -446,9 +469,9 @@ TEST(Highgui_Jpeg, encode_decode_optimize_jpeg)
 #ifdef ANDROID
 // Test disabled as it uses a lot of memory.
 // It is killed with SIGKILL by out of memory killer.
-TEST(Highgui_Tiff, DISABLED_decode_tile16384x16384)
+TEST(Imgcodecs_Tiff, DISABLED_decode_tile16384x16384)
 #else
-TEST(Highgui_Tiff, decode_tile16384x16384)
+TEST(Imgcodecs_Tiff, decode_tile16384x16384)
 #endif
 {
     // see issue #2161
@@ -477,7 +500,7 @@ TEST(Highgui_Tiff, decode_tile16384x16384)
     remove(file4.c_str());
 }
 
-TEST(Highgui_Tiff, write_read_16bit_big_little_endian)
+TEST(Imgcodecs_Tiff, write_read_16bit_big_little_endian)
 {
     // see issue #2601 "16-bit Grayscale TIFF Load Failures Due to Buffer Underflow and Endianness"
 
@@ -560,7 +583,7 @@ public:
     }
 };
 
-TEST(Highgui_Tiff, decode_tile_remainder)
+TEST(Imgcodecs_Tiff, decode_tile_remainder)
 {
     CV_GrfmtReadTifTiledWithNotFullTiles test; test.safe_run();
 }
@@ -569,7 +592,7 @@ TEST(Highgui_Tiff, decode_tile_remainder)
 
 #ifdef HAVE_WEBP
 
-TEST(Highgui_WebP, encode_decode_lossless_webp)
+TEST(Imgcodecs_WebP, encode_decode_lossless_webp)
 {
     cvtest::TS& ts = *cvtest::TS::ptr();
     string input = string(ts.get_data_path()) + "../cv/shared/lena.png";
@@ -618,7 +641,7 @@ TEST(Highgui_WebP, encode_decode_lossless_webp)
     EXPECT_TRUE(cvtest::norm(img, img_webp, NORM_INF) == 0);
 }
 
-TEST(Highgui_WebP, encode_decode_lossy_webp)
+TEST(Imgcodecs_WebP, encode_decode_lossy_webp)
 {
     cvtest::TS& ts = *cvtest::TS::ptr();
     std::string input = std::string(ts.get_data_path()) + "../cv/shared/lena.png";
@@ -642,7 +665,7 @@ TEST(Highgui_WebP, encode_decode_lossy_webp)
     }
 }
 
-TEST(Highgui_WebP, encode_decode_with_alpha_webp)
+TEST(Imgcodecs_WebP, encode_decode_with_alpha_webp)
 {
     cvtest::TS& ts = *cvtest::TS::ptr();
     std::string input = std::string(ts.get_data_path()) + "../cv/shared/lena.png";
@@ -668,7 +691,7 @@ TEST(Highgui_WebP, encode_decode_with_alpha_webp)
 
 #endif
 
-TEST(Highgui_Hdr, regression)
+TEST(Imgcodecs_Hdr, regression)
 {
     string folder = string(cvtest::TS::ptr()->get_data_path()) + "/readwrite/";
     string name_rle = folder + "rle.hdr";

@@ -76,6 +76,9 @@ enum
     CV_IMWRITE_JPEG_QUALITY =1,
     CV_IMWRITE_JPEG_PROGRESSIVE =2,
     CV_IMWRITE_JPEG_OPTIMIZE =3,
+    CV_IMWRITE_JPEG_RST_INTERVAL =4,
+    CV_IMWRITE_JPEG_LUMA_QUALITY =5,
+    CV_IMWRITE_JPEG_CHROMA_QUALITY =6,
     CV_IMWRITE_PNG_COMPRESSION =16,
     CV_IMWRITE_PNG_STRATEGY =17,
     CV_IMWRITE_PNG_BILEVEL =18,
@@ -108,6 +111,18 @@ enum
 
 /* utility function: convert one image to another with optional vertical flip */
 CVAPI(void) cvConvertImage( const CvArr* src, CvArr* dst, int flags CV_DEFAULT(0));
+
+CVAPI(int) cvHaveImageReader(const char* filename);
+CVAPI(int) cvHaveImageWriter(const char* filename);
+
+
+/****************************************************************************************\
+*                              Obsolete functions/synonyms                               *
+\****************************************************************************************/
+
+#define cvvLoadImage(name) cvLoadImage((name),1)
+#define cvvSaveImage cvSaveImage
+#define cvvConvertImage cvConvertImage
 
 
 #ifdef __cplusplus
