@@ -49,6 +49,13 @@
 # endif
 #endif
 
+#if defined ANDROID || defined __linux__
+#  include <unistd.h>
+#  include <fcntl.h>
+#  include <elf.h>
+#  include <linux/auxvec.h>
+#endif
+
 #if defined WIN32 || defined _WIN32 || defined WINCE
 #ifndef _WIN32_WINNT           // This is needed for the declaration of TryEnterCriticalSection in winbase.h with Visual Studio 2005 (and older?)
   #define _WIN32_WINNT 0x0400  // http://msdn.microsoft.com/en-us/library/ms686857(VS.85).aspx
@@ -311,6 +318,29 @@ struct HWFeatures
             f.have[CV_CPU_AVX_512VL]      = (cpuid_data[1] & (1<<31)) != 0;
             f.have[CV_CPU_AVX_512VBMI]    = (cpuid_data[2] &  (1<<1)) != 0;
         }
+
+    #if defined ANDROID || defined __linux__
+        int cpufile = open("/proc/self/auxv", O_RDONLY);
+
+        if (cpufile >= 0)
+        {
+            Elf32_auxv_t auxv;
+            const size_t size_auxv_t = sizeof(Elf32_auxv_t);
+
+            while (read(cpufile, &auxv, sizeof(Elf32_auxv_t)) == size_auxv_t)
+            {
+                if (auxv.a_type == AT_HWCAP)
+                {
+                    f.have[CV_CPU_NEON] = (auxv.a_un.a_val & 4096) != 0;
+                    break;
+                }
+            }
+
+            close(cpufile);
+        }
+    #elif (defined __clang__ || defined __APPLE__) && defined __ARM_NEON__
+        f.have[CV_CPU_NEON] = true;
+    #endif
 
         return f;
     }
