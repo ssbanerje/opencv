@@ -64,7 +64,7 @@ FUNCTOR_TEMPLATE(VLoadStore128);
 #if CV_SSE2
 FUNCTOR_TEMPLATE(VLoadStore64);
 FUNCTOR_TEMPLATE(VLoadStore128Aligned);
-#if CV_AVX
+#if CV_AVX2
 FUNCTOR_TEMPLATE(VLoadStore256);
 FUNCTOR_TEMPLATE(VLoadStore256Aligned);
 #endif
@@ -2785,9 +2785,15 @@ struct Div_SIMD
 template <>
 struct Div_SIMD<uchar>
 {
+    bool haveSIMD;
+    Div_SIMD() { haveSIMD = checkHardwareSupport(CV_CPU_SSE4_1); }
+
     int operator() (const uchar * src1, const uchar * src2, uchar * dst, int width, double scale) const
     {
         int x = 0;
+
+        if (!haveSIMD)
+            return x;
 
         __m128d v_scale = _mm_set1_pd(scale);
         __m128i v_zero = _mm_setzero_si128();
@@ -2831,9 +2837,15 @@ struct Div_SIMD<uchar>
 template <>
 struct Div_SIMD<schar>
 {
+    bool haveSIMD;
+    Div_SIMD() { haveSIMD = checkHardwareSupport(CV_CPU_SSE2); }
+
     int operator() (const schar * src1, const schar * src2, schar * dst, int width, double scale) const
     {
         int x = 0;
+
+        if (!haveSIMD)
+            return x;
 
         __m128d v_scale = _mm_set1_pd(scale);
         __m128i v_zero = _mm_setzero_si128();
@@ -2877,9 +2889,15 @@ struct Div_SIMD<schar>
 template <>
 struct Div_SIMD<ushort>
 {
+    bool haveSIMD;
+    Div_SIMD() { haveSIMD = checkHardwareSupport(CV_CPU_SSE4_1); }
+
     int operator() (const ushort * src1, const ushort * src2, ushort * dst, int width, double scale) const
     {
         int x = 0;
+
+        if (!haveSIMD)
+            return x;
 
         __m128d v_scale = _mm_set1_pd(scale);
         __m128i v_zero = _mm_setzero_si128();
@@ -2922,9 +2940,15 @@ struct Div_SIMD<ushort>
 template <>
 struct Div_SIMD<short>
 {
+    bool haveSIMD;
+    Div_SIMD() { haveSIMD = checkHardwareSupport(CV_CPU_SSE2); }
+
     int operator() (const short * src1, const short * src2, short * dst, int width, double scale) const
     {
         int x = 0;
+
+        if (!haveSIMD)
+            return x;
 
         __m128d v_scale = _mm_set1_pd(scale);
         __m128i v_zero = _mm_setzero_si128();
@@ -2965,9 +2989,15 @@ struct Div_SIMD<short>
 template <>
 struct Div_SIMD<int>
 {
+    bool haveSIMD;
+    Div_SIMD() { haveSIMD = checkHardwareSupport(CV_CPU_SSE2); }
+
     int operator() (const int * src1, const int * src2, int * dst, int width, double scale) const
     {
         int x = 0;
+
+        if (!haveSIMD)
+            return x;
 
         __m128d v_scale = _mm_set1_pd(scale);
         __m128i v_zero = _mm_setzero_si128();
@@ -3061,9 +3091,15 @@ struct Recip_SIMD
 template <>
 struct Recip_SIMD<uchar>
 {
+    bool haveSIMD;
+    Recip_SIMD() { haveSIMD = checkHardwareSupport(CV_CPU_SSE4_1); }
+
     int operator() (const uchar * src2, uchar * dst, int width, double scale) const
     {
         int x = 0;
+
+        if (!haveSIMD)
+            return x;
 
         __m128d v_scale = _mm_set1_pd(scale);
         __m128i v_zero = _mm_setzero_si128();
@@ -3100,9 +3136,15 @@ struct Recip_SIMD<uchar>
 template <>
 struct Recip_SIMD<schar>
 {
+    bool haveSIMD;
+    Recip_SIMD() { haveSIMD = checkHardwareSupport(CV_CPU_SSE2); }
+
     int operator() (const schar * src2, schar * dst, int width, double scale) const
     {
         int x = 0;
+
+        if (!haveSIMD)
+            return x;
 
         __m128d v_scale = _mm_set1_pd(scale);
         __m128i v_zero = _mm_setzero_si128();
@@ -3139,9 +3181,15 @@ struct Recip_SIMD<schar>
 template <>
 struct Recip_SIMD<ushort>
 {
+    bool haveSIMD;
+    Recip_SIMD() { haveSIMD = checkHardwareSupport(CV_CPU_SSE4_1); }
+
     int operator() (const ushort * src2, ushort * dst, int width, double scale) const
     {
         int x = 0;
+
+        if (!haveSIMD)
+            return x;
 
         __m128d v_scale = _mm_set1_pd(scale);
         __m128i v_zero = _mm_setzero_si128();
@@ -3177,9 +3225,15 @@ struct Recip_SIMD<ushort>
 template <>
 struct Recip_SIMD<short>
 {
+    bool haveSIMD;
+    Recip_SIMD() { haveSIMD = checkHardwareSupport(CV_CPU_SSE2); }
+
     int operator() (const short * src2, short * dst, int width, double scale) const
     {
         int x = 0;
+
+        if (!haveSIMD)
+            return x;
 
         __m128d v_scale = _mm_set1_pd(scale);
         __m128i v_zero = _mm_setzero_si128();
@@ -3213,9 +3267,15 @@ struct Recip_SIMD<short>
 template <>
 struct Recip_SIMD<int>
 {
+    bool haveSIMD;
+    Recip_SIMD() { haveSIMD = checkHardwareSupport(CV_CPU_SSE2); }
+
     int operator() (const int * src2, int * dst, int width, double scale) const
     {
         int x = 0;
+
+        if (!haveSIMD)
+            return x;
 
         __m128d v_scale = _mm_set1_pd(scale);
         __m128i v_zero = _mm_setzero_si128();
@@ -4422,7 +4482,8 @@ static void cmp8u(const uchar* src1, size_t step1, const uchar* src2, size_t ste
         {
             int x =0;
             #if CV_SSE2
-            if( USE_SSE2 ){
+            if( USE_SSE2 )
+            {
                 __m128i m128 = code == CMP_GT ? _mm_setzero_si128() : _mm_set1_epi8 (-1);
                 __m128i c128 = _mm_set1_epi8 (-128);
                 for( ; x <= size.width - 16; x += 16 )
@@ -4438,7 +4499,7 @@ static void cmp8u(const uchar* src1, size_t step1, const uchar* src2, size_t ste
 
                 }
             }
-           #elif CV_NEON
+            #elif CV_NEON
             uint8x16_t mask = code == CMP_GT ? vdupq_n_u8(0) : vdupq_n_u8(255);
 
             for( ; x <= size.width - 16; x += 16 )
@@ -4460,7 +4521,8 @@ static void cmp8u(const uchar* src1, size_t step1, const uchar* src2, size_t ste
         {
             int x = 0;
             #if CV_SSE2
-            if( USE_SSE2 ){
+            if( USE_SSE2 )
+            {
                 __m128i m128 =  code == CMP_EQ ? _mm_setzero_si128() : _mm_set1_epi8 (-1);
                 for( ; x <= size.width - 16; x += 16 )
                 {
@@ -4470,7 +4532,7 @@ static void cmp8u(const uchar* src1, size_t step1, const uchar* src2, size_t ste
                     _mm_storeu_si128((__m128i*)(dst + x), r00);
                 }
             }
-           #elif CV_NEON
+            #elif CV_NEON
             uint8x16_t mask = code == CMP_EQ ? vdupq_n_u8(0) : vdupq_n_u8(255);
 
             for( ; x <= size.width - 16; x += 16 )
@@ -4550,7 +4612,8 @@ static void cmp16s(const short* src1, size_t step1, const short* src2, size_t st
         {
             int x =0;
             #if CV_SSE2
-            if( USE_SSE2){//
+            if( USE_SSE2)
+            {
                 __m128i m128 =  code == CMP_GT ? _mm_setzero_si128() : _mm_set1_epi16 (-1);
                 for( ; x <= size.width - 16; x += 16 )
                 {
@@ -4574,7 +4637,7 @@ static void cmp16s(const short* src1, size_t step1, const short* src2, size_t st
                     x += 8;
                 }
             }
-           #elif CV_NEON
+            #elif CV_NEON
             uint8x16_t mask = code == CMP_GT ? vdupq_n_u8(0) : vdupq_n_u8(255);
 
             for( ; x <= size.width - 16; x += 16 )
@@ -4589,8 +4652,7 @@ static void cmp16s(const short* src1, size_t step1, const short* src2, size_t st
 
                 vst1q_u8(dst+x, veorq_u8(vcombine_u8(t1, t2), mask));
             }
-
-           #endif
+            #endif
 
             for( ; x < size.width; x++ ){
                  dst[x] = (uchar)(-(src1[x] > src2[x]) ^ m);
@@ -4604,7 +4666,8 @@ static void cmp16s(const short* src1, size_t step1, const short* src2, size_t st
         {
             int x = 0;
             #if CV_SSE2
-            if( USE_SSE2 ){
+            if( USE_SSE2 )
+            {
                 __m128i m128 =  code == CMP_EQ ? _mm_setzero_si128() : _mm_set1_epi16 (-1);
                 for( ; x <= size.width - 16; x += 16 )
                 {
@@ -4628,7 +4691,7 @@ static void cmp16s(const short* src1, size_t step1, const short* src2, size_t st
                     x += 8;
                 }
             }
-           #elif CV_NEON
+            #elif CV_NEON
             uint8x16_t mask = code == CMP_EQ ? vdupq_n_u8(0) : vdupq_n_u8(255);
 
             for( ; x <= size.width - 16; x += 16 )
@@ -4643,8 +4706,8 @@ static void cmp16s(const short* src1, size_t step1, const short* src2, size_t st
 
                 vst1q_u8(dst+x, veorq_u8(vcombine_u8(t1, t2), mask));
             }
-           #endif
-           for( ; x < size.width; x++ )
+            #endif
+            for( ; x < size.width; x++ )
                 dst[x] = (uchar)(-(src1[x] == src2[x]) ^ m);
         }
     }

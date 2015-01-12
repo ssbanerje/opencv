@@ -397,6 +397,8 @@ static int countNonZero_(const T* src, int len )
     return nz;
 }
 
+#if CV_SSE2
+
 static const uchar * initPopcountTable()
 {
     static uchar tab[256];
@@ -424,6 +426,8 @@ static const uchar * initPopcountTable()
 
     return tab;
 }
+
+#endif
 
 static int countNonZero8u( const uchar* src, int len )
 {
