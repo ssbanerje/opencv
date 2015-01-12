@@ -1811,9 +1811,9 @@ struct RGB2YCrCb_f<float>
         float C0 = coeffs[0], C1 = coeffs[1], C2 = coeffs[2], C3 = coeffs[3], C4 = coeffs[4];
         n *= 3;
 
-        if (scn == 3)
+        if (scn == 3 || scn == 4)
         {
-            for ( ; i <= n - 24; i += 24, src += 24)
+            for ( ; i <= n - 24; i += 24, src += 8 * scn)
             {
                 __m128 v_r0 = _mm_loadu_ps(src);
                 __m128 v_r1 = _mm_loadu_ps(src + 4);
@@ -1822,7 +1822,15 @@ struct RGB2YCrCb_f<float>
                 __m128 v_b0 = _mm_loadu_ps(src + 16);
                 __m128 v_b1 = _mm_loadu_ps(src + 20);
 
-                _mm_deinterleave_ps(v_r0, v_r1, v_g0, v_g1, v_b0, v_b1);
+                if (scn == 4)
+                {
+                    __m128 v_a0 = _mm_loadu_ps(src + 24);
+                    __m128 v_a1 = _mm_loadu_ps(src + 28);
+                    _mm_deinterleave_ps(v_r0, v_r1, v_g0, v_g1,
+                                        v_b0, v_b1, v_a0, v_a1);
+                }
+                else
+                    _mm_deinterleave_ps(v_r0, v_r1, v_g0, v_g1, v_b0, v_b1);
 
                 __m128 v_y0, v_cr0, v_cb0;
                 process(v_r0, v_g0, v_b0,
@@ -2176,7 +2184,7 @@ struct RGB2YCrCb_i<uchar>
         int delta = ColorChannel<uchar>::half()*(1 << yuv_shift);
         n *= 3;
 
-        if (scn == 3)
+        if (scn == 3 || scn == 4)
         {
             for ( ; i <= n - 96; i += 96, src += scn * 32)
             {
@@ -2187,7 +2195,15 @@ struct RGB2YCrCb_i<uchar>
                 __m128i v_b0 = _mm_loadu_si128((__m128i const *)(src + 64));
                 __m128i v_b1 = _mm_loadu_si128((__m128i const *)(src + 80));
 
-                _mm_deinterleave_epi8(v_r0, v_r1, v_g0, v_g1, v_b0, v_b1);
+                if (scn == 4)
+                {
+                    __m128i v_a0 = _mm_loadu_si128((__m128i const *)(src + 96));
+                    __m128i v_a1 = _mm_loadu_si128((__m128i const *)(src + 112));
+                    _mm_deinterleave_epi8(v_r0, v_r1, v_g0, v_g1,
+                                          v_b0, v_b1, v_a0, v_a1);
+                }
+                else
+                    _mm_deinterleave_epi8(v_r0, v_r1, v_g0, v_g1, v_b0, v_b1);
 
                 __m128i v_y0 = v_zero, v_cr0 = v_zero, v_cb0 = v_zero;
                 process(_mm_unpacklo_epi8(v_r0, v_zero),
@@ -2315,8 +2331,7 @@ struct RGB2YCrCb_i<ushort>
         int delta = ColorChannel<ushort>::half()*(1 << yuv_shift);
         n *= 3;
 
-
-        if (scn == 3)
+        if (scn == 3 || scn == 4)
         {
             for ( ; i <= n - 48; i += 48, src += scn * 16)
             {
@@ -2327,7 +2342,16 @@ struct RGB2YCrCb_i<ushort>
                 __m128i v_b0 = _mm_loadu_si128((__m128i const *)(src + 32));
                 __m128i v_b1 = _mm_loadu_si128((__m128i const *)(src + 40));
 
-                _mm_deinterleave_epi16(v_r0, v_r1, v_g0, v_g1, v_b0, v_b1);
+                if (scn == 4)
+                {
+                    __m128i v_a0 = _mm_loadu_si128((__m128i const *)(src + 48));
+                    __m128i v_a1 = _mm_loadu_si128((__m128i const *)(src + 56));
+
+                    _mm_deinterleave_epi16(v_r0, v_r1, v_g0, v_g1,
+                                           v_b0, v_b1, v_a0, v_a1);
+                }
+                else
+                    _mm_deinterleave_epi16(v_r0, v_r1, v_g0, v_g1, v_b0, v_b1);
 
                 __m128i v_y0 = v_zero, v_cr0 = v_zero, v_cb0 = v_zero;
                 process(v_r0, v_g0, v_b0,
@@ -2521,9 +2545,9 @@ struct YCrCb2RGB_f<float>
         float C0 = coeffs[0], C1 = coeffs[1], C2 = coeffs[2], C3 = coeffs[3];
         n *= 3;
 
-        if (dcn == 3)
+        if (dcn == 3 || dcn == 4)
         {
-            for ( ; i <= n - 24; i += 24, dst += 24)
+            for ( ; i <= n - 24; i += 24, dst += 8 * dcn)
             {
                 __m128 v_y0 = _mm_loadu_ps(src + i);
                 __m128 v_y1 = _mm_loadu_ps(src + i + 4);
@@ -2542,7 +2566,13 @@ struct YCrCb2RGB_f<float>
                 process(v_y1, v_cr1, v_cb1,
                         v_r1, v_g1, v_b1);
 
-                _mm_interleave_ps(v_r0, v_r1, v_g0, v_g1, v_b0, v_b1);
+                __m128 v_a0 = v_alpha, v_a1 = v_alpha;
+
+                if (dcn == 3)
+                    _mm_interleave_ps(v_r0, v_r1, v_g0, v_g1, v_b0, v_b1);
+                else
+                    _mm_interleave_ps(v_r0, v_r1, v_g0, v_g1,
+                                      v_b0, v_b1, v_a0, v_a1);
 
                 _mm_storeu_ps(dst, v_r0);
                 _mm_storeu_ps(dst + 4, v_r1);
@@ -2550,6 +2580,12 @@ struct YCrCb2RGB_f<float>
                 _mm_storeu_ps(dst + 12, v_g1);
                 _mm_storeu_ps(dst + 16, v_b0);
                 _mm_storeu_ps(dst + 20, v_b1);
+
+                if (dcn == 4)
+                {
+                    _mm_storeu_ps(dst + 24, v_a0);
+                    _mm_storeu_ps(dst + 28, v_a1);
+                }
             }
         }
 
@@ -2880,6 +2916,9 @@ struct YCrCb2RGB_i<uchar>
         v_delta2 = _mm_set1_epi32(1 << (yuv_shift - 1));
         v_zero = _mm_setzero_si128();
 
+        uchar alpha = ColorChannel<uchar>::max();
+        v_alpha = _mm_set1_epi8(*(char *)&alpha);
+
         useSSE = coeffs[0] <= std::numeric_limits<short>::max();
     }
 
@@ -2936,7 +2975,7 @@ struct YCrCb2RGB_i<uchar>
         int C0 = coeffs[0], C1 = coeffs[1], C2 = coeffs[2], C3 = coeffs[3];
         n *= 3;
 
-        if (dcn == 3 && useSSE)
+        if ((dcn == 3 || dcn == 4) && useSSE)
         {
             for ( ; i <= n - 96; i += 96, dst += dcn * 32)
             {
@@ -2985,7 +3024,13 @@ struct YCrCb2RGB_i<uchar>
                     std::swap(v_r1, v_b1);
                 }
 
-                _mm_interleave_epi8(v_r0, v_r1, v_g0, v_g1, v_b0, v_b1);
+                __m128i v_a0 = v_alpha, v_a1 = v_alpha;
+
+                if (dcn == 3)
+                    _mm_interleave_epi8(v_r0, v_r1, v_g0, v_g1, v_b0, v_b1);
+                else
+                    _mm_interleave_epi8(v_r0, v_r1, v_g0, v_g1,
+                                        v_b0, v_b1, v_a0, v_a1);
 
                 _mm_storeu_si128((__m128i *)(dst), v_r0);
                 _mm_storeu_si128((__m128i *)(dst + 16), v_r1);
@@ -2993,9 +3038,14 @@ struct YCrCb2RGB_i<uchar>
                 _mm_storeu_si128((__m128i *)(dst + 48), v_g1);
                 _mm_storeu_si128((__m128i *)(dst + 64), v_b0);
                 _mm_storeu_si128((__m128i *)(dst + 80), v_b1);
+
+                if (dcn == 4)
+                {
+                    _mm_storeu_si128((__m128i *)(dst + 96), v_a0);
+                    _mm_storeu_si128((__m128i *)(dst + 112), v_a1);
+                }
             }
         }
-
 
         for ( ; i < n; i += 3, dst += dcn)
         {
@@ -3198,9 +3248,9 @@ struct RGB2XYZ_f<float>
 
         n *= 3;
 
-        if (scn == 3)
+        if (scn == 3 || scn == 4)
         {
-            for ( ; i <= n - 24; i += 24, src += 24)
+            for ( ; i <= n - 24; i += 24, src += 8 * scn)
             {
                 __m128 v_r0 = _mm_loadu_ps(src);
                 __m128 v_r1 = _mm_loadu_ps(src + 4);
@@ -3209,7 +3259,16 @@ struct RGB2XYZ_f<float>
                 __m128 v_b0 = _mm_loadu_ps(src + 16);
                 __m128 v_b1 = _mm_loadu_ps(src + 20);
 
-                _mm_deinterleave_ps(v_r0, v_r1, v_g0, v_g1, v_b0, v_b1);
+                if (scn == 4)
+                {
+                    __m128 v_a0 = _mm_loadu_ps(src + 24);
+                    __m128 v_a1 = _mm_loadu_ps(src + 28);
+
+                    _mm_deinterleave_ps(v_r0, v_r1, v_g0, v_g1,
+                                        v_b0, v_b1, v_a0, v_a1);
+                }
+                else
+                    _mm_deinterleave_ps(v_r0, v_r1, v_g0, v_g1, v_b0, v_b1);
 
                 __m128 v_x0, v_y0, v_z0;
                 process(v_r0, v_g0, v_b0,
@@ -3596,6 +3655,8 @@ struct XYZ2RGB_f<float>
         v_c6 = _mm_set1_ps(coeffs[6]);
         v_c7 = _mm_set1_ps(coeffs[7]);
         v_c8 = _mm_set1_ps(coeffs[8]);
+
+        v_alpha = _mm_set1_ps(ColorChannel<float>::max());
     }
 
     void process(__m128 v_x, __m128 v_y, __m128 v_z,
@@ -3624,9 +3685,9 @@ struct XYZ2RGB_f<float>
         n *= 3;
         int i = 0;
 
-        if (dcn == 3)
+        if (dcn == 3 || dcn == 4)
         {
-            for ( ; i <= n - 24; i += 24, dst += 24)
+            for ( ; i <= n - 24; i += 24, dst += 8 * dcn)
             {
                 __m128 v_x0 = _mm_loadu_ps(src + i);
                 __m128 v_x1 = _mm_loadu_ps(src + i + 4);
@@ -3645,7 +3706,13 @@ struct XYZ2RGB_f<float>
                 process(v_x1, v_y1, v_z1,
                         v_r1, v_g1, v_b1);
 
-                _mm_interleave_ps(v_b0, v_b1, v_g0, v_g1, v_r0, v_r1);
+                __m128 v_a0 = v_alpha, v_a1 = v_alpha;
+
+                if (dcn == 4)
+                    _mm_interleave_ps(v_b0, v_b1, v_g0, v_g1,
+                                      v_r0, v_r1, v_a0, v_a1);
+                else
+                    _mm_interleave_ps(v_b0, v_b1, v_g0, v_g1, v_r0, v_r1);
 
                 _mm_storeu_ps(dst, v_b0);
                 _mm_storeu_ps(dst + 4, v_b1);
@@ -3653,6 +3720,12 @@ struct XYZ2RGB_f<float>
                 _mm_storeu_ps(dst + 12, v_g1);
                 _mm_storeu_ps(dst + 16, v_r0);
                 _mm_storeu_ps(dst + 20, v_r1);
+
+                if (dcn == 4)
+                {
+                    _mm_storeu_ps(dst + 24, v_a0);
+                    _mm_storeu_ps(dst + 28, v_a1);
+                }
             }
 
         }
@@ -3671,6 +3744,7 @@ struct XYZ2RGB_f<float>
     float coeffs[9];
 
     __m128 v_c0, v_c1, v_c2, v_c3, v_c4, v_c5, v_c6, v_c7, v_c8;
+    __m128 v_alpha;
 };
 
 #endif // CV_SSE2
