@@ -92,7 +92,7 @@ public:
     CvCapture_OpenNI2(const char * filename);
     virtual ~CvCapture_OpenNI2();
 
-    virtual double getProperty(int propIdx);
+    virtual double getProperty(int propIdx) const;
     virtual bool setProperty(int probIdx, double propVal);
     virtual bool grabFrame();
     virtual IplImage* retrieveFrame(int outputType);
@@ -124,11 +124,11 @@ protected:
 
     bool readCamerasParams();
 
-    double getDepthGeneratorProperty(int propIdx);
+    double getDepthGeneratorProperty(int propIdx) const;
     bool setDepthGeneratorProperty(int propIdx, double propVal);
-    double getImageGeneratorProperty(int propIdx);
+    double getImageGeneratorProperty(int propIdx) const;
     bool setImageGeneratorProperty(int propIdx, double propVal);
-    double getCommonProperty(int propIdx);
+    double getCommonProperty(int propIdx) const;
     bool setCommonProperty(int propIdx, double propVal);
 
     // OpenNI context
@@ -395,7 +395,7 @@ bool CvCapture_OpenNI2::readCamerasParams()
     return true;
 }
 
-double CvCapture_OpenNI2::getProperty( int propIdx )
+double CvCapture_OpenNI2::getProperty( int propIdx ) const
 {
     double propValue = 0;
 
@@ -444,7 +444,7 @@ bool CvCapture_OpenNI2::setProperty( int propIdx, double propValue )
     return isSet;
 }
 
-double CvCapture_OpenNI2::getCommonProperty( int propIdx )
+double CvCapture_OpenNI2::getCommonProperty( int propIdx ) const
 {
     double propValue = 0;
 
@@ -466,7 +466,7 @@ double CvCapture_OpenNI2::getCommonProperty( int propIdx )
         propValue = getDepthGeneratorProperty( propIdx );
         break;
     case CV_CAP_PROP_OPENNI2_SYNC :
-        propValue = device.getDepthColorSyncEnabled();
+        propValue = const_cast<CvCapture_OpenNI2 *>(this)->device.getDepthColorSyncEnabled();
     case CV_CAP_PROP_OPENNI2_MIRROR:
     {
         bool isMirroring = color.getMirroringEnabled() && depth.getMirroringEnabled();
@@ -508,7 +508,7 @@ bool CvCapture_OpenNI2::setCommonProperty( int propIdx, double propValue )
     return isSet;
 }
 
-double CvCapture_OpenNI2::getDepthGeneratorProperty( int propIdx )
+double CvCapture_OpenNI2::getDepthGeneratorProperty( int propIdx ) const
 {
     double propValue = 0;
     if( !depth.isValid() )
@@ -608,7 +608,7 @@ bool CvCapture_OpenNI2::setDepthGeneratorProperty( int propIdx, double propValue
     return isSet;
 }
 
-double CvCapture_OpenNI2::getImageGeneratorProperty( int propIdx )
+double CvCapture_OpenNI2::getImageGeneratorProperty( int propIdx ) const
 {
     double propValue = 0.;
     if( !color.isValid() )
@@ -821,10 +821,10 @@ IplImage* CvCapture_OpenNI2::retrieveValidDepthMask()
     if (!depthFrame.isValid())
         return 0;
 
-    cv::Mat depth;
-    getDepthMapFromMetaData(depthFrame, depth, noSampleValue, shadowValue);
+    cv::Mat d;
+    getDepthMapFromMetaData(depthFrame, d, noSampleValue, shadowValue);
 
-    outputMaps[CV_CAP_OPENNI_VALID_DEPTH_MASK].mat = depth != CvCapture_OpenNI2::INVALID_PIXEL_VAL;
+    outputMaps[CV_CAP_OPENNI_VALID_DEPTH_MASK].mat = d != CvCapture_OpenNI2::INVALID_PIXEL_VAL;
 
     return outputMaps[CV_CAP_OPENNI_VALID_DEPTH_MASK].getIplImagePtr();
 }
